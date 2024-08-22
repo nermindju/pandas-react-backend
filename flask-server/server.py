@@ -284,8 +284,8 @@ def upload_csv():
             print(global_df.columns)
             print(global_df[(global_df['model'] == 'Passat CC') & (global_df['type'] == 'SUV')])
 
-            global_df.drop(global_df[(global_df['year'] < 2023) & (global_df['mileage'] < 300)].index, inplace=True)
-
+            global_df.drop(global_df[(global_df['year'] < 2021) & (global_df['mileage'] < 1000)].index, inplace=True)
+            print(global_df[(global_df['year'] < 2020) & (global_df['mileage'] < 300)])
 
             # Filter for Volkswagen data
             data_vw = global_df[global_df['manufacturer'] == 'Volkswagen']
@@ -614,10 +614,10 @@ def model_listings():
 
         modelCounts = volkswagen_data['model'].value_counts().to_dict()
 
-        response_data = [
-            {'model_to_type': model_to_type},
-            {'modelCounts': modelCounts}
-        ]
+        response_data = {
+            'model_to_type': model_to_type,
+            'modelCounts': modelCounts
+        }
 
         return jsonify(response_data)
 
