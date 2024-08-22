@@ -46,20 +46,20 @@ model_to_type = {
         }
 
 vehicle_type_mapping = {
-    'Sedan': 5,
-    'Hatchback': 1,
-    'Caravan': 3,
-    'Small car': 6,
-    'Monovolume': 7,
-    'SUV': 12,
-    'Van': 4,
-    'Sports/Coupe': 13,
+    'Sedan': 10,
+    'Hatchback': 3,
+    'Caravan': 1,
+    'Small car': 11,
+    'Monovolume': 4,
+    'SUV': 9,
+    'Van': 13,
+    'Sports/Coupe': 12,
     'Caddy': 0,
-    'Other': 10,
+    'Other': 7,
     'Convertible': 2,
-    'Pick-up': 11,
-    'Off-Road':8,
-    'Oldtimer':9
+    'Pick-up': 8,
+    'Off-Road':5,
+    'Oldtimer':6
 }       
         
 drivetrain_mapping = {'FWD':0, 'AWD':1, 'RWD':2}
@@ -255,26 +255,6 @@ def upload_csv():
             global_df['type'].replace('Terenac','SUV', inplace=True)
             global_df['type'].replace('Pick up', 'Pick-up', inplace=True)
             global_df['type'].replace('Off Road', 'Off-Road', inplace=True)
-            global_df.loc[(global_df['model'] == 'Golf') & (global_df['type'] == 'Sedan'), 'type'] = 'Hatchback'
-            global_df.loc[(global_df['model'] == 'Golf') & (global_df['type'] == 'SUV'), 'type'] = 'Hatchback'
-            global_df.loc[(global_df['model'] == 'Arteon') & (global_df['type'] == 'SUV'), 'type'] = 'Sedan'
-            global_df.loc[(global_df['model'] == 'ID.3') & (global_df['type'] == 'Sedan'), 'type'] = 'Hatchback'
-            global_df.loc[(global_df['model'] == 'ID.4') & (global_df['type'] == 'Sedan'), 'type'] = 'SUV'
-            global_df.loc[(global_df['model'] == 'Taigo') & (global_df['type'] == 'Sedan'), 'type'] = 'SUV'
-            global_df.loc[(global_df['model'] == 'Tiguan') & (global_df['type'] == 'Sedan'), 'type'] = 'SUV'
-            global_df.loc[(global_df['model'] == 'Passat CC') & (global_df['type'] == 'SUV'), 'type'] = 'Sedan'
-            global_df.loc[(global_df['model'] == 'Caddy') & (global_df['type'] == 'Sedan'), 'type'] = 'Monovolume'
-            global_df.loc[(global_df['model'] == 'Sharan') & (global_df['type'] == 'Sedan'), 'type'] = 'Monovolume'
-            global_df.loc[(global_df['model'] == 'Sharan') & (global_df['type'] == 'SUV'), 'type'] = 'Monovolume'
-            global_df.loc[(global_df['model'] == 'Passat') & (global_df['type'] == 'SUV'), 'type'] = 'Sedan'
-            global_df.loc[(global_df['model'] == 'Polo') & (global_df['type'] == 'SUV'), 'type'] = 'Hatchback'
-            global_df.loc[(global_df['model'] == 'Touareg') & (global_df['type'] == 'Sedan'), 'type'] = 'SUV'
-            global_df.loc[(global_df['model'] == 'Touran') & (global_df['type'] == 'SUV'), 'type'] = 'Monovolume'
-            global_df.loc[(global_df['model'] == 'Touran') & (global_df['type'] == 'Sedan'), 'type'] = 'Monovolume'
-            global_df.loc[(global_df['model'] == 'Golf Plus') & (global_df['type'] == 'SUV'), 'type'] = 'Monovolume'
-            global_df.loc[(global_df['model'] == 'Golf Plus') & (global_df['type'] == 'Sedan'), 'type'] = 'Monovolume'
-            global_df.loc[(global_df['model'] == 'Tiguan') & (global_df['type'] == 'Monovolume'), 'type'] = 'SUV'
-            global_df.loc[(global_df['model'] == 'Touareg') & (global_df['type'] == 'Monovolume'), 'type'] = 'SUV'
 
 
             global_df['mileage'] = global_df['mileage'].astype('float')
@@ -282,20 +262,120 @@ def upload_csv():
 
             global_df.drop(global_df[(global_df['type'] == 'Hatchback') & (global_df['price'] > 200_000)].index, inplace=True)
             print(global_df.columns)
-            print(global_df[(global_df['model'] == 'Passat CC') & (global_df['type'] == 'SUV')])
+            print(global_df[(global_df['model'] == 'Passat CC') & (global_df['type'] == 'Other')])
 
-            global_df.drop(global_df[(global_df['year'] < 2023) & (global_df['mileage'] < 300)].index, inplace=True)
-
+            global_df.drop(global_df[(global_df['year'] < 2021) & (global_df['mileage'] < 1000)].index, inplace=True)
+            print(global_df[(global_df['year'] < 2020) & (global_df['mileage'] < 300)])
 
             # Filter for Volkswagen data
             data_vw = global_df[global_df['manufacturer'] == 'Volkswagen']
             data_vw['model'] = data_vw['model'].apply(standardize_model)
             data_vw = data_vw[data_vw['model'].notna()]
+            data_vw.loc[(data_vw['model'] == 'Golf') & (data_vw['type'] == 'Sedan'), 'type'] = 'Hatchback'
+            data_vw.loc[(data_vw['model'] == 'Golf') & (data_vw['type'] == 'SUV'), 'type'] = 'Hatchback'
+            data_vw.loc[(data_vw['model'] == 'Golf') & (data_vw['type'] == 'Monovolume'), 'type'] = 'Caravan'
+            data_vw.loc[(data_vw['model'] == 'Golf') & (data_vw['type'] == 'Off-Road'), 'type'] = 'Hatchback'
+            data_vw.loc[(data_vw['model'] == 'Golf') & (data_vw['type'] == 'Other'), 'type'] = 'Hatchback'
+            data_vw.loc[(data_vw['model'] == 'Golf') & (data_vw['type'] == 'Small car'), 'type'] = 'Hatchback'
+            data_vw.loc[(data_vw['model'] == 'Golf') & (data_vw['type'] == 'Sports/Coupe'), 'type'] = 'Hatchback'
+            data_vw.loc[(data_vw['model'] == 'Arteon') & (data_vw['type'] == 'SUV'), 'type'] = 'Sedan'
+            data_vw.loc[(data_vw['model'] == 'ID.3') & (data_vw['type'] == 'Sedan'), 'type'] = 'Hatchback'
+            data_vw.loc[(data_vw['model'] == 'ID.4') & (data_vw['type'] == 'Sedan'), 'type'] = 'SUV'
+            data_vw.loc[(data_vw['model'] == 'Taigo') & (data_vw['type'] == 'Sedan'), 'type'] = 'SUV'
+            data_vw.loc[(data_vw['model'] == 'Tiguan') & (data_vw['type'] == 'Sedan'), 'type'] = 'SUV'
+            data_vw.loc[(data_vw['model'] == 'CC') & (data_vw['type'] == 'SUV'), 'type'] = 'Sports/Coupe'
+            data_vw.loc[(data_vw['model'] == 'CC') & (data_vw['type'] == 'Van'), 'type'] = 'Sports/Coupe'
+            data_vw.loc[(data_vw['model'] == 'CC') & (data_vw['type'] == 'Other'), 'type'] = 'Sports/Coupe'
+            data_vw.loc[(data_vw['model'] == 'CC') & (data_vw['type'] == 'Sedan'), 'type'] = 'Sports/Coupe'
+            data_vw.loc[(data_vw['model'] == 'CC') & (data_vw['type'] == 'Small car'), 'type'] = 'Sports/Coupe'
+            data_vw.loc[(data_vw['model'] == 'Caddy') & (data_vw['type'] == 'Small car'), 'type'] = 'Caddy'
+            data_vw.loc[(data_vw['model'] == 'Caddy') & (data_vw['type'] == 'Monovolume'), 'type'] = 'Caddy'
+            data_vw.loc[(data_vw['model'] == 'Caddy') & (data_vw['type'] == 'Sedan'), 'type'] = 'Caddy'
+            data_vw.loc[(data_vw['model'] == 'Sharan') & (data_vw['type'] == 'Sedan'), 'type'] = 'Monovolume'
+            data_vw.loc[(data_vw['model'] == 'Sharan') & (data_vw['type'] == 'SUV'), 'type'] = 'Monovolume'
+            data_vw.loc[(data_vw['model'] == 'Sharan') & (data_vw['type'] == 'Caravan'), 'type'] = 'Monovolume'
+            data_vw.loc[(data_vw['model'] == 'Sharan') & (data_vw['type'] == 'Caddy'), 'type'] = 'Monovolume'
+            data_vw.loc[(data_vw['model'] == 'Sharan') & (data_vw['type'] == 'Other'), 'type'] = 'Monovolume'
+            data_vw.loc[(data_vw['model'] == 'Sharan') & (data_vw['type'] == 'Small car'), 'type'] = 'Monovolume'
+            data_vw.loc[(data_vw['model'] == 'Sharan') & (data_vw['type'] == 'Small car'), 'type'] = 'Monovolume'
+            data_vw.loc[(data_vw['model'] == 'Sharan') & (data_vw['type'] == 'Van'), 'type'] = 'Monovolume'
+            data_vw.loc[(data_vw['model'] == 'Passat') & (data_vw['type'] == 'SUV'), 'type'] = 'Sedan'
+            data_vw.loc[(data_vw['model'] == 'Polo') & (data_vw['type'] == 'SUV'), 'type'] = 'Hatchback'
+            data_vw.loc[(data_vw['model'] == 'Touareg') & (data_vw['type'] == 'Sedan'), 'type'] = 'SUV'
+            data_vw.loc[(data_vw['model'] == 'Touran') & (data_vw['type'] == 'SUV'), 'type'] = 'Monovolume'
+            data_vw.loc[(data_vw['model'] == 'Touran') & (data_vw['type'] == 'Sedan'), 'type'] = 'Monovolume'
+            data_vw.loc[(data_vw['model'] == 'Touran') & (data_vw['type'] == 'Caravan'), 'type'] = 'Monovolume'
+            data_vw.loc[(data_vw['model'] == 'Touran') & (data_vw['type'] == 'Convertible'), 'type'] = 'Monovolume'
+            data_vw.loc[(data_vw['model'] == 'Touran') & (data_vw['type'] == 'Other'), 'type'] = 'Monovolume'
+            data_vw.loc[(data_vw['model'] == 'Touran') & (data_vw['type'] == 'Small car'), 'type'] = 'Monovolume'
+            data_vw.loc[(data_vw['model'] == 'Golf Plus') & (data_vw['type'] == 'SUV'), 'type'] = 'Monovolume'
+            data_vw.loc[(data_vw['model'] == 'Golf Plus') & (data_vw['type'] == 'Sedan'), 'type'] = 'Monovolume'
+            data_vw.loc[(data_vw['model'] == 'Golf Plus') & (data_vw['type'] == 'Caravan'), 'type'] = 'Monovolume'
+            data_vw.loc[(data_vw['model'] == 'Golf Plus') & (data_vw['type'] == 'Other'), 'type'] = 'Monovolume'
+            data_vw.loc[(data_vw['model'] == 'Golf Plus') & (data_vw['type'] == 'Small car'), 'type'] = 'Monovolume'
+            data_vw.loc[(data_vw['model'] == 'Golf Plus') & (data_vw['type'] == 'Van'), 'type'] = 'Monovolume'  
+            data_vw.loc[(data_vw['model'] == 'Tiguan') & (data_vw['type'] == 'Monovolume'), 'type'] = 'SUV'
+            data_vw.loc[(data_vw['model'] == 'Tiguan') & (data_vw['type'] == 'Caravan'), 'type'] = 'SUV'
+            data_vw.loc[(data_vw['model'] == 'Tiguan') & (data_vw['type'] == 'Off-Road'), 'type'] = 'SUV'
+            data_vw.loc[(data_vw['model'] == 'Tiguan') & (data_vw['type'] == 'Off-Road'), 'type'] = 'SUV'
+            data_vw.loc[(data_vw['model'] == 'Tiguan') & (data_vw['type'] == 'Other'), 'type'] = 'SUV'
+            data_vw.loc[(data_vw['model'] == 'Tiguan') & (data_vw['type'] == 'Small car'), 'type'] = 'SUV'
+            data_vw.loc[(data_vw['model'] == 'Tiguan') & (data_vw['type'] == 'Sports/Coupe'), 'type'] = 'SUV'
+            data_vw.loc[(data_vw['model'] == 'Tiguan') & (data_vw['type'] == 'Van'), 'type'] = 'SUV'
+            data_vw.loc[(data_vw['model'] == 'Touareg') & (data_vw['type'] == 'Monovolume'), 'type'] = 'SUV'
+            data_vw.loc[(data_vw['model'] == 'Touareg') & (data_vw['type'] == 'Caravan'), 'type'] = 'SUV'
+            data_vw.loc[(data_vw['model'] == 'Touareg') & (data_vw['type'] == 'Small car'), 'type'] = 'SUV'
+            data_vw.loc[(data_vw['model'] == 'Touareg') & (data_vw['type'] == 'Sports/Coupe'), 'type'] = 'SUV'
+            data_vw.loc[(data_vw['model'] == 'Passat') & (data_vw['type'] == 'Monovolume'), 'type'] = 'Caravan'
+            data_vw.loc[(data_vw['model'] == 'Amarok') & (data_vw['type'] == 'Other'), 'type'] = 'Pick-up'
+            data_vw.loc[(data_vw['model'] == 'Amarok') & (data_vw['type'] == 'SUV'), 'type'] = 'Pick-up'
+            data_vw.loc[(data_vw['model'] == 'Amarok') & (data_vw['type'] == 'Sports/Coupe'), 'type'] = 'Pick-up'
+            data_vw.loc[(data_vw['model'] == 'Arteon') & (data_vw['type'] == 'Sports/Coupe'), 'type'] = 'Sedan'
+            data_vw.loc[(data_vw['model'] == 'Arteon') & (data_vw['type'] == 'Small car'), 'type'] = 'Sedan'
+            data_vw.loc[(data_vw['model'] == 'Bora') & (data_vw['type'] == 'Small car'), 'type'] = 'Sedan'
+            data_vw.loc[(data_vw['model'] == 'Passat Alltrack') & (data_vw['type'] == 'SUV'), 'type'] = 'Off-Road'
 
             data_vw['drivetrain'] = data_vw['drivetrain'].fillna(data_vw['model'].map(drivetrain_values))
             data_vw['type'] = data_vw['type'].fillna(data_vw['model'].map(model_to_type))
             data_vw['type'] = data_vw['type'].replace({'Kombi':'Van'})
-            print(data_vw[data_vw['type'] == 'Kombi'])
+            data_vw.loc[(data_vw['model'] == 'CC') & (data_vw['type'] == 'Sedan'), 'type'] = 'Sports/Coupe'
+            data_vw.loc[(data_vw['model'] == 'Caddy') & (data_vw['type'] == 'Van'), 'type'] = 'Caddy'
+            data_vw.loc[(data_vw['model'] == 'Caddy') & (data_vw['type'] == 'Caravan'), 'type'] = 'Caddy'
+            data_vw.loc[(data_vw['model'] == 'Bora') & (data_vw['type'] == 'Van'), 'type'] = 'Caravan'
+            data_vw.loc[(data_vw['model'] == 'Passat Alltrack') & (data_vw['type'] == 'Van'), 'type'] = 'Caravan'
+            data_vw.loc[(data_vw['model'] == 'Passat Variant') & (data_vw['type'] == 'Van'), 'type'] = 'Caravan'
+            data_vw.loc[(data_vw['model'] == 'T-Roc') & (data_vw['type'] == 'Caravan'), 'type'] = 'SUV'
+            data_vw.loc[(data_vw['model'] == 'T-Roc') & (data_vw['type'] == 'Monovolume'), 'type'] = 'SUV'
+            data_vw.loc[(data_vw['model'] == 'T-Roc') & (data_vw['type'] == 'Sedan'), 'type'] = 'SUV'
+            data_vw.loc[(data_vw['model'] == 'T5') & (data_vw['type'] == 'Sports/Coupe'), 'type'] = 'Van'
+            data_vw.loc[(data_vw['model'] == 'T5') & (data_vw['type'] == 'Convertible'), 'type'] = 'Van'
+            data_vw.loc[(data_vw['model'] == 'T5') & (data_vw['type'] == 'Caravan'), 'type'] = 'Van'
+            data_vw.loc[(data_vw['model'] == 'T5') & (data_vw['type'] == 'Caravan'), 'type'] = 'Van'
+            data_vw.loc[(data_vw['model'] == 'T5') & (data_vw['type'] == 'SUV'), 'type'] = 'Van'
+            data_vw.loc[(data_vw['model'] == 'Up!') & (data_vw['type'] == 'Hatchback'), 'type'] = 'Small car'
+            data_vw.loc[(data_vw['model'] == 'Up!') & (data_vw['type'] == 'Sedan'), 'type'] = 'Small car'
+            data_vw.loc[(data_vw['model'] == 'Golf Sportsvan') & (data_vw['type'] == 'Caravan'), 'type'] = 'Monovolume'
+            data_vw.loc[(data_vw['model'] == 'Golf Sportsvan') & (data_vw['type'] == 'Sedan'), 'type'] = 'Monovolume'
+            data_vw.loc[(data_vw['model'] == 'Golf Sportsvan') & (data_vw['type'] == 'Small car'), 'type'] = 'Monovolume'
+            data_vw.loc[(data_vw['model'] == 'Golf Sportsvan') & (data_vw['type'] == 'Other'), 'type'] = 'Monovolume'
+
+
+            data_vw.drop(data_vw[(data_vw['model'] == 'Golf') & (data_vw['type'] == 'Van')].index, inplace=True)
+            data_vw.drop(data_vw[(data_vw['model'] == 'Passat') & (data_vw['type'] == 'Convertible')].index, inplace=True)
+            data_vw.drop(data_vw[(data_vw['model'] == 'Passat') & (data_vw['type'] == 'Other')].index, inplace=True)
+            data_vw.drop(data_vw[(data_vw['model'] == 'Passat') & (data_vw['type'] == 'Small car')].index, inplace=True)
+            data_vw.drop(data_vw[(data_vw['model'] == 'Passat') & (data_vw['type'] == 'Van')].index, inplace=True)
+            data_vw.drop(data_vw[(data_vw['model'] == 'Passat') & (data_vw['type'] == 'Sports/Coupe')].index, inplace=True)
+            data_vw.drop(data_vw[(data_vw['model'] == 'Polo') & (data_vw['type'] == 'Other')].index, inplace=True)
+            data_vw.drop(data_vw[(data_vw['model'] == 'Bora') & (data_vw['type'] == 'Other')].index, inplace=True)
+            data_vw.drop(data_vw[(data_vw['model'] == 'Jetta') & (data_vw['type'] == 'Small car')].index, inplace=True)
+            data_vw.drop(data_vw[(data_vw['model'] == 'T-Roc') & (data_vw['type'] == 'Other')].index, inplace=True)
+            data_vw.drop(data_vw[(data_vw['model'] == 'T4') & (data_vw['type'] == 'Other')].index, inplace=True)
+            data_vw.drop(data_vw[(data_vw['model'] == 'T5') & (data_vw['type'] == 'Other')].index, inplace=True)
+            data_vw.drop(data_vw[(data_vw['model'] == 'Tiguan') & (data_vw['type'] == 'Oldtimer')].index, inplace=True)
+            data_vw.drop(data_vw[(data_vw['model'] == 'Touran') & (data_vw['type'] == 'Oldtimer')].index, inplace=True)
+            data_vw.drop(data_vw[(data_vw['model'] == 'Fox') & (data_vw['type'] == 'Other')].index, inplace=True)
+            print(data_vw[(data_vw['model'] == 'Golf Sportsvan') & (data_vw['type'] == 'Other')])
             print(f'Nullovi {data_vw.isnull().sum()}')
             # nan_drivetrain_models = data_vw[data_vw['drivetrain'].isna()]['model']
 
@@ -528,10 +608,11 @@ def get_models_price_box_data():
             return jsonify({"error": "No data available. Please upload a CSV file first."}), 400
         
         # Get the top 10 models by value counts
-        top_10_models = volkswagen_data['model'].value_counts().head(10).index.tolist()
+        top_10_models = volkswagen_data['model'].value_counts().head(30).index.tolist()
 
         # Define the vehicle types to include
-        selected_types = ['SUV', 'Hatchback', 'Sedan', 'Monovolume']
+        selected_types = ['SUV', 'Hatchback', 'Sedan', 'Caravan', 'Small car', 'Monovolume', 'Other', 
+                          'Sports/Coupe', 'Caddy', 'Van', 'Convertible', 'Pick-up', 'Off-Road', 'Oldtimer']
 
         # Filter the dataset based on the selected types and top 10 models
         filtered_data = volkswagen_data[
@@ -614,10 +695,10 @@ def model_listings():
 
         modelCounts = volkswagen_data['model'].value_counts().to_dict()
 
-        response_data = [
-            {'model_to_type': model_to_type},
-            {'modelCounts': modelCounts}
-        ]
+        response_data = {
+            'model_to_type': model_to_type,
+            'modelCounts': modelCounts
+        }
 
         return jsonify(response_data)
 
