@@ -249,6 +249,9 @@ def upload_csv():
             global_df.drop(global_df[(global_df['price'] > 100_000) & (global_df['year'] < 2006)].index, inplace=True)
             global_df.drop(global_df[global_df['year'] <= 0].index, inplace=True)
             global_df.drop(global_df[global_df['year'] < 1950].index, inplace=True)
+            global_df.drop(global_df[(global_df['model'] == 'ID.3') & (global_df['year'] < 2020)].index, inplace=True)
+            global_df.drop(global_df[(global_df['model'] == 'ID.4') & (global_df['year'] < 2020)].index, inplace=True)
+            global_df.drop(global_df[(global_df['model'] == 'ID.5') & (global_df['year'] < 2020)].index, inplace=True)
             global_df['type'].replace('Terenac','SUV', inplace=True)
             global_df['type'].replace('Pick up', 'Pick-up', inplace=True)
             global_df['type'].replace('Off Road', 'Off-Road', inplace=True)
@@ -273,7 +276,6 @@ def upload_csv():
             global_df.loc[(global_df['model'] == 'Tiguan') & (global_df['type'] == 'Monovolume'), 'type'] = 'SUV'
             global_df.loc[(global_df['model'] == 'Touareg') & (global_df['type'] == 'Monovolume'), 'type'] = 'SUV'
 
-            print(global_df[global_df['type'] == 'Kombi'])
 
             global_df['mileage'] = global_df['mileage'].astype('float')
             global_df.drop(global_df[global_df['mileage'] > 1_000_000].index, inplace=True)
@@ -282,6 +284,7 @@ def upload_csv():
             print(global_df.columns)
             print(global_df[(global_df['model'] == 'Passat CC') & (global_df['type'] == 'SUV')])
 
+            global_df.drop(global_df[(global_df['year'] < 2023) & (global_df['mileage'] < 300)].index, inplace=True)
 
 
             # Filter for Volkswagen data
@@ -338,8 +341,6 @@ def standardize_model(model):
     model = model.replace('Drugi', '').strip()
     model = model.replace('Kombi', '').strip()
     return model
-
-
 
 
 @app.route("/get_columns", methods=['GET'])

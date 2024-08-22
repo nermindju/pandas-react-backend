@@ -1,6 +1,7 @@
 const testXGBoostPrediction = async () => {
   const url = 'http://127.0.0.1:5000/get_XGBoost_prediction';
   const data = {
+      displacement: 1.9,
       year: 2010
   };
 
