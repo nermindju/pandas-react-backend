@@ -17,8 +17,9 @@ UPLOAD_FOLDER = 'uploads'
 os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
 
+
 global_df = None
-model_path = 'models/XGBoost_model.joblib'
+model_path = 'pandas-react-backend/flask-server/models/XGBoost_model.joblib'
 XGBoost_model = joblib.load(model_path)
 
 model_to_type = {
