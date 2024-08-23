@@ -46,29 +46,28 @@ model_to_type = {
         }
 
 vehicle_type_mapping = {
-    'Sedan': 10,
+    'Sedan': 9,
     'Hatchback': 3,
     'Caravan': 1,
-    'Small car': 11,
+    'Small car': 10,
     'Monovolume': 4,
-    'SUV': 9,
-    'Van': 13,
-    'Sports/Coupe': 12,
+    'SUV': 8,
+    'Van': 12,
+    'Sports/Coupe': 11,
     'Caddy': 0,
-    'Other': 7,
     'Convertible': 2,
-    'Pick-up': 8,
+    'Pick-up': 7,
     'Off-Road':5,
     'Oldtimer':6
 }       
         
-drivetrain_mapping = {'FWD':0, 'AWD':1, 'RWD':2}
+drivetrain_mapping = {'FWD':1, 'AWD':0, 'RWD':2}
 
-fuel_mapping = {'Diesel':1, 'Petrol': 0, 'Gas': 4, 'Electro': 2, 'Hybrid': 3} 
+fuel_mapping = {'Diesel':0, 'Petrol': 4, 'Gas': 2, 'Electro': 1, 'Hybrid': 3} 
 
 tranmission_mapping = {'Manual':0, 'Automatic':1}
 
-doors_mapping = {'4/5':0, '2/3':1}
+doors_mapping = {'4/5':1, '2/3':0}
 
 default_values = {
     'displacement': 1.9,
@@ -76,27 +75,27 @@ default_values = {
     'mileage' : 80_000,
     'year' : 2018,
     'rimsize' : 18.0,
-    'type' : 'Hatchback',
     'drivetrain' : 'FWD',
-    'fuel' : 'Diesel',
-    'transmission' : 'Manual',
     'doors' : '4/5',
+    'type' : 'Hatchback',
     'cruisecontrol' : 0,
     'aircondition' : 0,
     'navigation' : 0,
     'registration' : 0,
-    'parkingsensors' : 0
+    'fuel' : 'Diesel',
+    'parkingsensors' : 0,
+    'transmission' : 'Manual'
 }
 
-# Parking sensors {'Front':3, 'Rear':2, 'Front and Rear':1, '-':0}
+# Parking sensors {'Front':1, 'Rear':3, 'Front and Rear':2, '-':0}
 # Cruise control {'True':1, 'False':0}
 # Registration {'True':1, 'False':0}
 # Navigation {'True':1, 'False':0}
 # Air condition {'True':1, 'False':0}
-# Drivetrain {'FWD':0, 'AWD':1, 'RWd'2:}
-# Fuel {'Petrol':0, 'Diesel':1, 'Electro':2, 'Hybrid':3, 'Gas':4}
+# Drivetrain {'FWD':1, 'AWD':0, 'RWd'2:}
+# Fuel {'Petrol':4, 'Diesel':0, 'Electro':1, 'Hybrid':3, 'Gas':2}
 # Transmission {'Manual':0, 'Automatic':1}
-# Doors {'4/5':0, '2/3':1}
+# Doors {'4/5':1, '2/3':0}
 
 
 
@@ -523,6 +522,8 @@ def get_prediction():
         displacement_high = get_value('displacement') + 0.4
         year_low = get_value('year') - 2
         year_high = get_value('year') + 2
+        mileage_low = get_value('mileage') - 10000
+        mileage_high = get_value('mileage') + 10000
 
 
         # Filter data_vw DataFrame based on these criteria
@@ -535,7 +536,9 @@ def get_prediction():
             (volkswagen_data['displacement'] <= displacement_high) &
             (volkswagen_data['year'] >= year_low) &
             (volkswagen_data['year'] <= year_high) & 
-            (volkswagen_data['type'] == vehicle_type_str)
+            (volkswagen_data['type'] == vehicle_type_str) &
+            (volkswagen_data['mileage'] >= mileage_low) & 
+            (volkswagen_data['mileage'] <= mileage_high)
         ]
 
         # Select top 10 vehicles (or adjust the number as needed)

@@ -1,8 +1,21 @@
 const testXGBoostPrediction = async () => {
   const url = 'http://127.0.0.1:5000/get_XGBoost_prediction';
   const data = {
-      displacement: 1.9,
-      year: 2010
+    displacement: 2.0,
+    kilowatts: 100,
+    mileage: 80_000,
+    year: 2018,
+    rimsize: 18.0,
+    drivetrain: 'AWD',
+    doors: '4/5',
+    type: 'SUV',
+    cruisecontrol: 0,
+    aircondition: 0,
+    navigation: 0,
+    registration: 0,
+    fuel: 'Diesel',
+    parkingsensors: 0,
+    transmission: 'Manual'
   };
 
   try {
