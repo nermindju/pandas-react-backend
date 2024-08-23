@@ -26,7 +26,7 @@ model_to_type = {
             'Arteon': 'Sedan', 'Passat': 'Sedan', 'Golf': 'Hatchback',
             'Scirocco': 'Sports/Coupe', 'Tiguan': 'SUV', 'Polo': 'Hatchback',
             'Golf Variant': 'Van', 'Sharan': 'Monovolume', 'Bora': 'Van',
-            'Caddy': 'Kombi', 'T4': 'Kombi', 'Golf Plus': 'Monovolume',
+            'Caddy': 'Caddy', 'T4': 'Van', 'Golf Plus': 'Monovolume',
             'Touran': 'Monovolume', 'CC': 'Sedan', 'Jetta': 'Sedan',
             'Amarok': 'Pick-up', 'Golf Alltrack': 'Van', 'T5': 'Van',
             'Touareg': 'SUV', 'T-Roc': 'SUV', 'T5 Caravelle': 'Van',
@@ -401,7 +401,6 @@ def upload_csv():
             data_vw.drop(data_vw[(data_vw['model'] == 'Buba / Käfer / New Beetle') & (data_vw['type'] == 'Sedan')].index, inplace=True)
             data_vw.drop(data_vw[(data_vw['model'] == 'Buggy') & (data_vw['type'] == 'Other')].index, inplace=True)
             data_vw.drop(data_vw[(data_vw['model'] == 'T6') & (data_vw['type'] == 'Other')].index, inplace=True)
-            print(data_vw[(data_vw['model'] == 'T6') & (data_vw['type'] == 'Other')])
             print(f'Nullovi {data_vw.isnull().sum()}')
             # nan_drivetrain_models = data_vw[data_vw['drivetrain'].isna()]['model']
 
@@ -752,7 +751,8 @@ def get_line_plot_data():
         # Group data by model and calculate min and median prices
         grouped_data = filtered_data.groupby('model')['price'].agg([
             ('25PercentilePrice', lambda x: x.quantile(0.25)),
-            ('medianPrice', 'median')
+            ('medianPrice', 'median'),
+            ('75PercentilePrice', lambda x: x.quantile(0.75)),
         ]).reset_index()
 
         price_data = [
@@ -763,6 +763,10 @@ def get_line_plot_data():
             {
                 'id': 'Median Price',
                 'data': [{'x': row['model'], 'y': row['medianPrice']} for _, row in grouped_data.iterrows()]
+            },
+            {
+                'id': '75% Price',
+                'data': [{'x': row['model'], 'y': row['75PercentilePrice']} for _, row in grouped_data.iterrows()]
             }
         ]
 
