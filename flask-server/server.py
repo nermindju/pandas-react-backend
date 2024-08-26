@@ -401,6 +401,7 @@ def upload_csv():
             data_vw.drop(data_vw[(data_vw['model'] == 'Buba / Käfer / New Beetle') & (data_vw['type'] == 'Sedan')].index, inplace=True)
             data_vw.drop(data_vw[(data_vw['model'] == 'Buggy') & (data_vw['type'] == 'Other')].index, inplace=True)
             data_vw.drop(data_vw[(data_vw['model'] == 'T6') & (data_vw['type'] == 'Other')].index, inplace=True)
+            data_vw.drop(data_vw[(data_vw['model'] == 'Golf') & (data_vw['price'] > 400_000)].index, inplace=True)
             print(f'Nullovi {data_vw.isnull().sum()}')
             # nan_drivetrain_models = data_vw[data_vw['drivetrain'].isna()]['model']
 
