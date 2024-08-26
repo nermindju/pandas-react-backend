@@ -793,12 +793,88 @@ def get_prices():
         return jsonify({
             'mean_price': avg_price,
             'median_price': median_price,
-            '25_percent_price' : quantile_price_25,
-            '75_percent_price' : quantile_price_75
+            'first_quantile' : quantile_price_25,
+            'third_quantile' : quantile_price_75
         })
 
     except Exception as e:
         return jsonify({"error": str(e)}), 500
+    
+
+@app.route('/get_correlation_heatmap', methods=['GET'])
+def get_correlation_heatmap():
+    try:
+        encoder = LabelEncoder()
+        # Load the data
+        data = pd.read_csv('uploads/volkswagen_data.csv')
+
+        data['type'] = data['type'].map(vehicle_type_mapping)
+        data['transmission'] = data['transmission'].map({'Manual':0, 'Automatic':1, 'Semi-automatic':1})
+        data['cruisecontrol'] = encoder.fit_transform(data['cruisecontrol'])
+        data['navigation'] = encoder.fit_transform(data['navigation'])
+        data['aircondition'] = encoder.fit_transform(data['aircondition'])
+        data['registration'] = encoder.fit_transform(data['registration'])
+        data['parkingsensors'] = encoder.fit_transform(data['parkingsensors'])
+        data['fuel'] = encoder.fit_transform(data['fuel'])
+        data['drivetrain'] = encoder.fit_transform(data['drivetrain'])
+        data['doors'] = encoder.fit_transform(data['doors'])
+        
+        # Filter only numeric data for the selected column
+
+        numeric_data = data.select_dtypes(include='number')
+        
+        # Calculate the correlation matrix
+        correlation_matrix = numeric_data.corr().round(2)
+        
+        # Format the correlation matrix into the required format
+        heatmap_data = [
+            {
+                'id': row,
+                'data': [{'x': col, 'y': correlation_matrix.at[row, col]} for col in correlation_matrix.columns]
+            }
+            for row in correlation_matrix.index
+        ]
+        
+        return jsonify(heatmap_data)
+    
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
+
+@app.route('/get_scatterplot_data', methods=['GET'])
+def get_scatterplot_data():
+    try:
+        # Load the data from the CSV file
+        data = pd.read_csv('uploads/volkswagen_data.csv')
+        
+        if 'price' not in data.columns or 'year' not in data.columns or 'type' not in data.columns:
+            return jsonify({"error": "'price', 'year', or 'type' column is missing"}), 400
+            
+        grouped_data = data.groupby('type')
+        
+        # Prepare the scatterplot data
+        scatterplot_data = []
+        for vehicle_type, group in grouped_data:
+            vehicle_data = {
+                "id": vehicle_type,
+                "data": [{"x": row['year'], "y": row['price']} for index, row in group.iterrows()]
+            }
+            scatterplot_data.append(vehicle_data)
+        
+        return jsonify(scatterplot_data)
+    
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
+
+
+if __name__ == '__main__':
+    app.run(debug=True)
+
+
+
 
 
 # @app.route("/group_by", methods=["POST"])
@@ -831,146 +907,6 @@ def get_prices():
 #     return jsonify({
 #         "grouped_data": grouped_data
 #     })
-
-# @app.route("/fillna", methods=["POST"])
-# def fillna():
-#     global global_df
-
-#     if global_df is None:
-#         return jsonify({"error": "No data available. Please upload a CSV file first."}), 400
-
-#     request_data = request.get_json()
-#     fill_value = request_data.get("fill_value")
-#     method = request_data.get("method")
-#     column_name = request_data.get("column_name")
-
-#     if fill_value is None and method is None:
-#         return jsonify({"error": "Either fill_value or method is required"}), 400
-
-#     if fill_value is not None and method is not None:
-#         return jsonify({"error": "Cannot specify both fill_value and method"}), 400
-
-#     if column_name and column_name not in global_df.columns:
-#         return jsonify({"error": f"Invalid column name: {column_name}"}), 400
-
-#     try:
-#         if column_name:
-#             if fill_value is not None:
-#                 global_df[column_name].fillna(fill_value, inplace=True)
-#             else:
-#                 global_df[column_name].fillna(method=method, inplace=True)
-#         else:
-#             if fill_value is not None:
-#                 global_df.fillna(fill_value, inplace=True)
-#             else:
-#                 global_df.fillna(method=method, inplace=True)
-#         data = global_df.to_dict(orient="records")
-#     except Exception as e:
-#         return jsonify({"error": str(e)}), 500
-
-#     return jsonify({
-#         "data": data,
-#         "shape": global_df.shape
-#     })
-
-# @app.route("/dropna", methods=["POST"])
-# def dropna():
-#     global global_df
-
-#     if global_df is None:
-#         return jsonify({"error": "No data available. Please upload a CSV file first."}), 400
-
-#     request_data = request.get_json()
-#     axis = request_data.get("axis", 0)  # 0 for rows, 1 for columns
-#     how = request_data.get("how", "any")  # 'any' or 'all'
-
-#     if axis not in [0, 1]:
-#         return jsonify({"error": "Invalid axis value"}), 400
-
-#     if how not in ["any", "all"]:
-#         return jsonify({"error": "Invalid how value"}), 400
-
-#     try:
-#         global_df.dropna(axis=axis, how=how, inplace=True)
-#         data = global_df.to_dict(orient="records")
-#     except Exception as e:
-#         return jsonify({"error": str(e)}), 500
-
-#     return jsonify({
-#         "data": data,
-#         "shape": global_df.shape
-#     })
-
-# @app.route("/count_plot", methods=['POST'])
-# def count_plot():
-#     if data_vw is None:
-#         return jsonify({"error": "No data available. Please upload a CSV file first."}), 400
-    
-#     data = request.json
-#     x_column = data.get('x_column')
-    
-#     if x_column not in data_vw.columns:
-#         return jsonify({"error": f"Column '{x_column}' not found in the data."}), 400
-
-#     plt.figure(figsize=(7, 4))
-#     sns.countplot(x=x_column, data=data_vw)
-#     plt.title(f"Count Plot for {x_column}")
-
-#     img = BytesIO()
-#     plt.savefig(img, format='png')
-#     img.seek(0)
-#     img_base64 = base64.b64encode(img.getvalue()).decode('utf-8')
-#     plt.close()
-
-#     return jsonify({"count_plot": img_base64})
-
-# @app.route("/scatter_plot", methods=['POST'])
-# def scatter_plot():
-#     if data_vw is None:
-#         return jsonify({"error": "No data available. Please upload a CSV file first."}), 400
-    
-#     data = request.json
-#     x_column = data.get('x_column')
-#     y_column = data.get('y_column')
-    
-#     print(f"Received x_column: {x_column}, y_column: {y_column}")  # Debugging line
-
-#     if x_column not in data_vw.columns:
-#         return jsonify({"error": f"Column '{x_column}' not found in the data."}), 400
-
-#     if y_column and y_column not in data_vw.columns:
-#         return jsonify({"error": f"Column '{y_column}' not found in the data."}), 400
-
-#     plt.figure(figsize=(7, 4))
-#     sns.scatterplot(x=x_column, y=y_column, data=data_vw)
-#     plt.title(f"Scatter Plot for {x_column} vs {y_column}")
-
-#     img = BytesIO()
-#     plt.savefig(img, format='png')
-#     img.seek(0)
-#     img_base64 = base64.b64encode(img.getvalue()).decode('utf-8')
-#     plt.close()
-
-#     return jsonify({"scatter_plot": img_base64})
-
-
-# @app.route("/heat_map", methods=['POST'])
-# def heat_map():
-#     if data_vw is None:
-#         return jsonify({"error": "No data available. Please upload a CSV file first."}), 400
-
-#     plt.figure(figsize=(7, 4))
-#     sns.heatmap(data=numeric_vw_data.corr(), annot=True, cmap='coolwarm')
-#     plt.title(f"Heat map")
-#     plt.xticks(rotation=45)
-
-#     img = BytesIO()
-#     plt.savefig(img, format='png')
-#     img.seek(0)
-#     img_base64 = base64.b64encode(img.getvalue()).decode('utf-8')
-#     plt.close()
-
-#     return jsonify({"heat_map": img_base64})
 
 if __name__ == "__main__":  
     app.run(debug=True)
