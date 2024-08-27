@@ -909,6 +909,28 @@ def get_line_plot_data_prices():
         return jsonify({"error": str(e)}), 500
 
 
+@app.route("/get_top5_models_price_data", methods=["GET"])
+def get_top5_models_price_data():
+    volkswagen_data = pd.read_csv('uploads/volkswagen_data.csv')
+
+    try:
+        if volkswagen_data is None or 'model' not in volkswagen_data.columns:
+            return jsonify({"error": "No data available or 'model' column is missing."}), 400
+
+
+        # Get top 5 models
+        top5_models = volkswagen_data['model'].value_counts().head(5).index
+        # Average price for each model
+        average_prices = volkswagen_data[volkswagen_data['model'].isin(top5_models)].groupby('model')['price'].mean().round(2).sort_values(ascending=False)
+        
+
+        # Format the data as required
+        top5_models_avg_price = [{"id": model, "average_price": avg_price} for model, avg_price in average_prices.items()]
+
+        return jsonify(top5_models_avg_price)
+
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
 
 
 
