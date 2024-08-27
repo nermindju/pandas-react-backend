@@ -151,7 +151,7 @@ def upload_csv():
             global_df['type'] = global_df['type'].replace({'Limuzina':'Sedan', 'Kombi': 'Van', 'Monovolumen':'Monovolume', 'Karavan':'Caravan', 'Malo auto':'Small car', 
                                                            'Kabriolet':'Convertible', 'Ostalo': 'Other', 'Sportski/kupe':'Sports/Coupe'})
             global_df['fuel'] = global_df['fuel'].replace({'Dizel':'Diesel', 'Benzin':'Petrol', 'Hibrid':'Hybrid', 'Elektro':'Electro', 'Plin':'Gas'})
-            global_df['transmission'] = global_df['transmission'].replace({'Manuelni':'Manual', 'Automatik':'Automatic'})
+            global_df['transmission'] = global_df['transmission'].replace({'Manuelni':'Manual', 'Automatik':'Automatic', 'Polu-automatik':'Semi-automatic', 'Poluautomatik':'Semi-automatic'})
             global_df['parkingsensors'] = global_df['parkingsensors'].replace({'Naprijed':'Front', 'Nazad':'Rear', 'Naprijed i nazad':'Front and Rear'})
 
             drivetrain_values = {
@@ -758,7 +758,7 @@ def get_line_plot_data():
 
         price_data = [
             {
-                'id': 'Price Range',
+                'id': '25% Price',
                 'data': [{'x': row['model'], 'y': row['25PercentilePrice']} for _, row in grouped_data.iterrows()]
             },
             {
@@ -868,6 +868,88 @@ def get_scatterplot_data():
         return jsonify({"error": str(e)}), 500
 
 
+@app.route("/get_line_plot_data_prices", methods=['GET'])
+def get_line_plot_data_prices():
+    volkswagen_data = pd.read_csv('uploads/volkswagen_data.csv')
+    
+    try:
+        if volkswagen_data is None or 'type' not in volkswagen_data.columns or 'price' not in volkswagen_data.columns:
+            return jsonify({"error": "No data available or 'type'/'price' column is missing"}), 400
+        
+        # Get the top 5 models by count
+        top_models = volkswagen_data['type'].value_counts().nlargest(5).index.tolist()
+
+        # Filter data for only these top models
+        filtered_data = volkswagen_data[volkswagen_data['type'].isin(top_models)]
+        
+        # Group data by model and calculate min and median prices
+        grouped_data = filtered_data.groupby('type')['price'].agg([
+            ('25PercentilePrice', lambda x: x.quantile(0.25)),
+            ('medianPrice', 'median'),
+            ('75PercentilePrice', lambda x: x.quantile(0.75)),
+        ]).reset_index()
+
+        price_data = [
+            {
+                'id': '25% Price',
+                'data': [{'x': row['type'], 'y': row['25PercentilePrice']} for _, row in grouped_data.iterrows()]
+            },
+            {
+                'id': 'Median Price',
+                'data': [{'x': row['type'], 'y': row['medianPrice']} for _, row in grouped_data.iterrows()]
+            },
+            {
+                'id': '75% Price',
+                'data': [{'x': row['type'], 'y': row['75PercentilePrice']} for _, row in grouped_data.iterrows()]
+            }
+        ]
+
+        return jsonify(price_data)
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
+@app.route("/get_top5_models_avg_price_data", methods=["GET"])
+def get_top5_models_avg_price_data():
+    volkswagen_data = pd.read_csv('uploads/volkswagen_data.csv')
+
+    try:
+        if volkswagen_data is None or 'model' not in volkswagen_data.columns:
+            return jsonify({"error": "No data available or 'model' column is missing."}), 400
+
+
+        # Get top 5 models
+        top5_models = volkswagen_data['model'].value_counts().head(5).index
+        # Average price for each model
+        average_prices = volkswagen_data[volkswagen_data['model'].isin(top5_models)].groupby('model')['price'].mean().round(2).sort_values(ascending=False)
+        
+
+        # Format the data as required
+        top5_models_avg_price = [{"id": model, "average_price": avg_price} for model, avg_price in average_prices.items()]
+
+        return jsonify(top5_models_avg_price)
+
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
+@app.route("/map", methods=['GET'])
+def generate_map_data():
+    try:
+        top_locations = pd.read_csv('pandas-react-backend/flask-server/location_map/geocoded_locations.csv')
+    except FileNotFoundError:
+        return {
+            "error": "geocoded_locations.csv file not found."
+        }
+
+    # Convert the data into a format that can be easily used by the frontend
+    location_data = top_locations.to_dict(orient='records')
+
+    return {
+        "locations": location_data,
+        "center": [44.0, 17.8],  # Center on Bosnia and Herzegovina
+        "zoom": 7
+    }
 
 
 if __name__ == '__main__':
