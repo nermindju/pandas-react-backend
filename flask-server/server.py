@@ -909,8 +909,8 @@ def get_line_plot_data_prices():
         return jsonify({"error": str(e)}), 500
 
 
-@app.route("/get_top5_models_price_data", methods=["GET"])
-def get_top5_models_price_data():
+@app.route("/get_top5_models_avg_price_data", methods=["GET"])
+def get_top5_models_avg_price_data():
     volkswagen_data = pd.read_csv('uploads/volkswagen_data.csv')
 
     try:
@@ -932,6 +932,24 @@ def get_top5_models_price_data():
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
+
+@app.route("/map", methods=['GET'])
+def generate_map_data():
+    try:
+        top_locations = pd.read_csv('pandas-react-backend/flask-server/location_map/geocoded_locations.csv')
+    except FileNotFoundError:
+        return {
+            "error": "geocoded_locations.csv file not found."
+        }
+
+    # Convert the data into a format that can be easily used by the frontend
+    location_data = top_locations.to_dict(orient='records')
+
+    return {
+        "locations": location_data,
+        "center": [44.0, 17.8],  # Center on Bosnia and Herzegovina
+        "zoom": 7
+    }
 
 
 if __name__ == '__main__':
