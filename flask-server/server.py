@@ -404,6 +404,7 @@ def upload_csv():
             data_vw.drop(data_vw[(data_vw['model'] == 'Buggy') & (data_vw['type'] == 'Other')].index, inplace=True)
             data_vw.drop(data_vw[(data_vw['model'] == 'T6') & (data_vw['type'] == 'Other')].index, inplace=True)
             data_vw.drop(data_vw[(data_vw['model'] == 'Golf') & (data_vw['price'] > 400_000)].index, inplace=True)
+            data_vw.drop(data_vw[(data_vw['model'] == 'Touran') & (data_vw['year'] < 2003)].index, inplace=True)
             print(f'Nullovi {data_vw.isnull().sum()}')
             # nan_drivetrain_models = data_vw[data_vw['drivetrain'].isna()]['model']
 
@@ -852,14 +853,14 @@ def get_correlation_heatmap():
 
         data['type'] = data['type'].map(vehicle_type_mapping)
         data['transmission'] = data['transmission'].map({'Manual':0, 'Automatic':1, 'Semi-automatic':1})
-        data['cruisecontrol'] = encoder.fit_transform(data['cruisecontrol'])
-        data['navigation'] = encoder.fit_transform(data['navigation'])
-        data['aircondition'] = encoder.fit_transform(data['aircondition'])
-        data['registration'] = encoder.fit_transform(data['registration'])
-        data['parkingsensors'] = encoder.fit_transform(data['parkingsensors'])
+        # data['cruisecontrol'] = encoder.fit_transform(data['cruisecontrol'])
+        # data['navigation'] = encoder.fit_transform(data['navigation'])
+        # data['aircondition'] = encoder.fit_transform(data['aircondition'])
+        # data['registration'] = encoder.fit_transform(data['registration'])
+        # data['parkingsensors'] = encoder.fit_transform(data['parkingsensors'])
         data['fuel'] = encoder.fit_transform(data['fuel'])
         data['drivetrain'] = encoder.fit_transform(data['drivetrain'])
-        data['doors'] = encoder.fit_transform(data['doors'])
+        # data['doors'] = encoder.fit_transform(data['doors'])
         
         # Filter only numeric data for the selected column
 
@@ -992,6 +993,87 @@ def generate_map_data():
         "center": [44.0, 17.8],  # Center on Bosnia and Herzegovina
         "zoom": 7
     }
+
+
+@app.route("/get_top5models_barplot_data", methods=['GET'])
+def get_top5models_barplot_data():
+    volkswagen_data = pd.read_csv('uploads/volkswagen_data.csv')
+
+    try:
+        if volkswagen_data is None or 'model' not in volkswagen_data.columns or 'price' not in volkswagen_data.columns:
+            return jsonify({"error": "No data available or 'model' column is missing."}), 400
+
+        # Filter data for years >= 1990
+        data = volkswagen_data[volkswagen_data['year'] >= 1990]
+
+        # Create 5-year range column
+        data['year_range'] = pd.cut(data['year'], bins=range(1990, 2026, 5), right=False, labels=[f"{i}-{i+4}" for i in range(1990, 2021, 5)])
+
+        # Group by model and year range, and calculate the average price
+        grouped = data.groupby(['model', 'year_range']).price.mean().round(2).reset_index()
+
+        # Find top 5 car models based on occurrences
+        top_models = data['model'].value_counts().nlargest(5).index
+
+        # Filter the grouped data for the top 5 car models
+        final_result = grouped[grouped['model'].isin(top_models)]
+        final_result.dropna(inplace=True)
+
+        # Transform into the required JSON format
+        result = []
+        for year_range in final_result['year_range'].unique():
+            year_data = {"year_range": year_range}
+            for model in top_models:
+                model_data = final_result[(final_result['model'] == model) & (final_result['year_range'] == year_range)]
+                if not model_data.empty:
+                    year_data[model] = model_data['price'].values[0]
+            result.append(year_data)
+
+        return jsonify(result), 200
+
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
+
+@app.route("/get_top5types_barplot_data", methods=['GET'])
+def get_top5types_barplot_data():
+    volkswagen_data = pd.read_csv('uploads/volkswagen_data.csv')
+
+    try:
+        if volkswagen_data is None or 'type' not in volkswagen_data.columns or 'price' not in volkswagen_data.columns:
+            return jsonify({"error": "No data available or 'model' column is missing."}), 400
+
+        # Filter data for years >= 1990
+        data = volkswagen_data[volkswagen_data['year'] >= 1990]
+
+        # Create 5-year range column
+        data['year_range'] = pd.cut(data['year'], bins=range(1990, 2026, 5), right=False, labels=[f"{i}-{i+4}" for i in range(1990, 2021, 5)])
+
+        # Group by model and year range, and calculate the average price
+        grouped = data.groupby(['type', 'year_range']).price.mean().round(2).reset_index()
+
+        # Find top 5 car models based on occurrences
+        top_types = data['type'].value_counts().nlargest(5).index
+
+        # Filter the grouped data for the top 5 car models
+        final_result = grouped[grouped['type'].isin(top_types)]
+        final_result.dropna(inplace=True)
+
+        # Transform into the required JSON format
+        result = []
+        for year_range in final_result['year_range'].unique():
+            year_data = {"year_range": year_range}
+            for model in top_types:
+                model_data = final_result[(final_result['type'] == model) & (final_result['year_range'] == year_range)]
+                if not model_data.empty:
+                    year_data[model] = model_data['price'].values[0]
+            result.append(year_data)
+
+        return jsonify(result), 200
+
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
 
 
 if __name__ == '__main__':

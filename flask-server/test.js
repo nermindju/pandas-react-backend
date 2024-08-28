@@ -1,5 +1,5 @@
 // Define the request payload with only type and year
-const payload = {
+const data = {
   type: 'SUV',
   year: 2022
 };
@@ -10,7 +10,7 @@ fetch('http://127.0.0.1:5000/get_XGBoost_prediction', {
   headers: {
       'Content-Type': 'application/json'
   },
-  body: JSON.stringify(payload)
+  body: JSON.stringify(data)
 })
 .then(response => response.json())
 .then(data => {
