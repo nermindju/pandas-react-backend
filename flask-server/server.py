@@ -69,11 +69,13 @@ tranmission_mapping = {'Manual':0, 'Automatic':1}
 
 doors_mapping = {'4/5':1, '2/3':0}
 
+sensors_mapping = {'Front':1, 'Rear':3, 'Front and Rear':2, '-':0}
+
 default_values = {
     'displacement': 1.9,
     'kilowatts': 77,
     'mileage' : 80_000,
-    'year' : 2018,
+    'year' : 2011,
     'rimsize' : 18.0,
     'drivetrain' : 'FWD',
     'doors' : '4/5',
@@ -85,7 +87,7 @@ default_values = {
     'fuel' : 'Diesel',
     'parkingsensors' : 0,
     'transmission' : 'Manual'
-}
+}   
 
 # Parking sensors {'Front':1, 'Rear':3, 'Front and Rear':2, '-':0}
 # Cruise control {'True':1, 'False':0}
@@ -419,10 +421,9 @@ def upload_csv():
             numeric_vw_data = numeric_vw_data.replace({np.nan: None})
 
             # Save the Volkswagen data as a CSV file
-            vw_csv_filename = 'volkswagen_data.csv'
-            vw_csv_path = os.path.join(app.config['UPLOAD_FOLDER'], vw_csv_filename)
+            vw_csv = 'volkswagen_data.csv'
+            vw_csv_path = os.path.join(app.config['UPLOAD_FOLDER'], vw_csv)
             data_vw.to_csv(vw_csv_path, index=False)
-
 
             # Convert data to JSON-serializable format
             data = data_vw.to_dict(orient="records")
@@ -459,95 +460,135 @@ def get_columns():
 
 @app.route("/get_XGBoost_prediction", methods=['POST'])
 def get_prediction():
-
-    volkswagen_data = pd.read_csv('uploads/volkswagen_data.csv')
+    volkswagen_data = pd.read_csv('uploads/volkswagen_data.csv', encoding='utf-8')
     try:
-        # Get JSON data from the request
         data = request.json
 
-        # Function to get value with fallback to default if value is missing or empty
-        def get_value(key):
-            return data.get(key) if data.get(key) not in [None, ""] else default_values[key]
+        # Extract user-provided values
+        vehicle_type_str = data.get('type')
+        year_value = data.get('year')
 
-        # Use the get_value function to handle missing/empty values
-        vehicle_type_str = get_value('type')
-        vehicle_drivetrain_str = get_value('drivetrain')
-        fuel_mapping_str = get_value('fuel')
-        transmission_mapping_str = get_value('transmission')
-        doors_mapping_str = get_value('doors')
+        if not vehicle_type_str or not year_value:
+            return jsonify({"error": "Vehicle type and year are required"}), 400
 
-        numeric_vehicle_type = vehicle_type_mapping.get(vehicle_type_str)
-        if numeric_vehicle_type is None:
-            return jsonify({"error": f"Unknown vehicle type: {vehicle_type_str}"}), 400
-        numeric_vehicle_drivetrain = drivetrain_mapping.get(vehicle_drivetrain_str)
-        if numeric_vehicle_drivetrain is None:
-            return jsonify({"error": f"Unknown drivetrain type: {vehicle_drivetrain_str}"}), 400
-        numeric_vehicle_fuel = fuel_mapping.get(fuel_mapping_str)
-        if numeric_vehicle_fuel is None:
-            return jsonify({"error": f"Unknown fuel type: {fuel_mapping_str}"}), 400
-        numeric_vehicle_transmission = tranmission_mapping.get(transmission_mapping_str)
-        if numeric_vehicle_transmission is None:
-            return jsonify({"error": f"Unknown transmission type: {transmission_mapping_str}"}), 400
-        numeric_vehicle_doors = doors_mapping.get(doors_mapping_str)
-        if numeric_vehicle_doors is None:
-            return jsonify({"error": f"Unknown doors type: {doors_mapping_str}"}), 400
-
-        # Prepare features with default values for missing/empty data
-        features = [
-            get_value('displacement'),
-            get_value('kilowatts'),
-            get_value('mileage'),
-            get_value('year'),
-            get_value('rimsize'),
-            numeric_vehicle_drivetrain,
-            numeric_vehicle_doors,
-            numeric_vehicle_type,
-            get_value('cruisecontrol'),
-            get_value('aircondition'),
-            get_value('navigation'),
-            get_value('registration'),
-            numeric_vehicle_fuel,
-            get_value('parkingsensors'),
-            numeric_vehicle_transmission
+        # Filter data by the provided type and year to calculate modes
+        filtered_data = volkswagen_data[
+            (volkswagen_data['type'] == vehicle_type_str) &
+            (volkswagen_data['year'] == int(year_value))
         ]
 
-        features = [features]  # Convert to 2D array (list of lists)
+        # If no data found for the given type and year, return an error
+        if filtered_data.empty:
+            return jsonify({"error": "No data available for the given type and year"}), 404
+
+        # Calculate modes for the fields where defaults are required
+        def calculate_mode(column):
+            if column in filtered_data:
+                return filtered_data[column].mode().iloc[0]
+            return None
+        
+        # Calculate the mean for mileage
+        def calculate_mean(column):
+            if column in filtered_data:
+                return filtered_data[column].mean()
+            return None
+
+        mode_values = {
+            'displacement': calculate_mode('displacement'),
+            'kilowatts': calculate_mode('kilowatts'),
+            'mileage': calculate_mean('mileage'),
+            'rimsize': calculate_mode('rimsize'),
+            'drivetrain': calculate_mode('drivetrain'),
+            'doors': calculate_mode('doors'),
+            'cruisecontrol': calculate_mode('cruisecontrol'),
+            'aircondition': calculate_mode('aircondition'),
+            'navigation': calculate_mode('navigation'),
+            'registration': calculate_mode('registration'),
+            'fuel': calculate_mode('fuel'),
+            'parkingsensors': calculate_mode('parkingsensors'),
+            'transmission': calculate_mode('transmission')
+        }
+
+        # Helper function to get either user-provided or mode value
+        def get_value(key):
+            return data.get(key) if data.get(key) not in [None, ""] else mode_values[key]
+
+        # Use the mappings to convert to numeric values
+        numeric_vehicle_type = vehicle_type_mapping.get(vehicle_type_str)
+        numeric_vehicle_drivetrain = drivetrain_mapping.get(get_value('drivetrain'))
+        numeric_vehicle_fuel = fuel_mapping.get(get_value('fuel'))
+        numeric_vehicle_transmission = tranmission_mapping.get(get_value('transmission'))
+        numeric_vehicle_doors = doors_mapping.get(get_value('doors'))
+        numeric_vehicle_sensors = sensors_mapping.get(get_value('parkingsensors'))
+
+        # Validate mappings
+        if any(x is None for x in [numeric_vehicle_type, numeric_vehicle_drivetrain, numeric_vehicle_fuel, numeric_vehicle_transmission, numeric_vehicle_doors, numeric_vehicle_sensors]):
+            return jsonify({"error": "Invalid mapping for vehicle attributes"}), 400
+
+        # Prepare features with numeric data
+        features = [
+            float(get_value('displacement')),
+            float(get_value('kilowatts')),
+            float(get_value('mileage')),
+            float(year_value),  # Ensure year is numeric
+            float(get_value('rimsize')),
+            float(numeric_vehicle_drivetrain),
+            float(numeric_vehicle_doors),
+            float(numeric_vehicle_type),
+            float(get_value('cruisecontrol')),
+            float(get_value('aircondition')),
+            float(get_value('navigation')),
+            float(get_value('registration')),
+            float(numeric_vehicle_fuel),
+            float(numeric_vehicle_sensors),
+            float(numeric_vehicle_transmission)
+        ]
+
+        # Convert to NumPy array with appropriate dtype
+        features = np.array([features], dtype=np.float32)  # 2D array, dtype float32
+
+        # Make the prediction
         prediction = XGBoost_model.predict(features)[0]
 
-        price_range_low = prediction - 5000 
-        price_range_high = prediction + 5000 
-        kw_low = get_value('kilowatts') - 30
-        kw_high = get_value('kilowatts') + 30
-        displacement_low = get_value('displacement') - 0.4
-        displacement_high = get_value('displacement') + 0.4
-        year_low = get_value('year') - 2
-        year_high = get_value('year') + 2
-        mileage_low = get_value('mileage') - 10000
-        mileage_high = get_value('mileage') + 10000
-
-
-        # Filter data_vw DataFrame based on these criteria
+        # Apply filters only to the user-provided fields
         filtered_vehicles = volkswagen_data[
-            (volkswagen_data['price'] >= price_range_low) &
-            (volkswagen_data['price'] <= price_range_high) &
-            (volkswagen_data['kilowatts'] >= kw_low) &
-            (volkswagen_data['kilowatts'] <= kw_high) &
-            (volkswagen_data['displacement'] >= displacement_low) &
-            (volkswagen_data['displacement'] <= displacement_high) &
-            (volkswagen_data['year'] >= year_low) &
-            (volkswagen_data['year'] <= year_high) & 
-            (volkswagen_data['type'] == vehicle_type_str) &
-            (volkswagen_data['mileage'] >= mileage_low) & 
-            (volkswagen_data['mileage'] <= mileage_high)
+            (volkswagen_data['type'] == vehicle_type_str) & 
+            (volkswagen_data['year'] >= int(year_value) - 3) &
+            (volkswagen_data['year'] <= int(year_value) + 3) &
+            (volkswagen_data['price'] >= prediction - 5000) &
+            (volkswagen_data['price'] <= prediction + 5000)
         ]
 
-        # Select top 10 vehicles (or adjust the number as needed)
+        if 'kilowatts' in data and data['kilowatts'] not in [None, ""]:
+            kw_low = get_value('kilowatts') - 30
+            kw_high = get_value('kilowatts') + 30
+            filtered_vehicles = filtered_vehicles[
+                (filtered_vehicles['kilowatts'] >= kw_low) &
+                (filtered_vehicles['kilowatts'] <= kw_high)
+            ]
+        
+        if 'displacement' in data and data['displacement'] not in [None, ""]:
+            displacement_low = get_value('displacement') - 0.4
+            displacement_high = get_value('displacement') + 0.4
+            filtered_vehicles = filtered_vehicles[
+                (filtered_vehicles['displacement'] >= displacement_low) &
+                (filtered_vehicles['displacement'] <= displacement_high)
+            ]
+        
+        if 'mileage' in data and data['mileage'] not in [None, ""]:
+            mileage_low = get_value('mileage') - 10000
+            mileage_high = get_value('mileage') + 10000
+            filtered_vehicles = filtered_vehicles[
+                (filtered_vehicles['mileage'] >= mileage_low) &
+                (filtered_vehicles['mileage'] <= mileage_high)
+            ]
+
+        # Select top 10 vehicles
         filtered_vehicles = filtered_vehicles.head(10)
 
         # Convert the filtered vehicles to JSON-serializable format
         filtered_vehicles_json = filtered_vehicles.to_dict(orient='records')
 
-        # Return the prediction and the filtered vehicles
         return jsonify({
             "prediction": str(prediction),
             "vehicles": filtered_vehicles_json
@@ -557,6 +598,7 @@ def get_prediction():
         return jsonify({"error": f"Missing parameter: {str(e)}"}), 400
     except Exception as e:
         return jsonify({"error": str(e)}), 500
+
 
 
 @app.route("/hist_plot", methods=["GET"])

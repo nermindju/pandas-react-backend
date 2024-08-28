@@ -1,45 +1,30 @@
-const testXGBoostPrediction = async () => {
-  const url = 'http://127.0.0.1:5000/get_XGBoost_prediction';
-  const data = {
-    displacement: 2.0,
-    kilowatts: 100,
-    mileage: 80_000,
-    year: 2018,
-    rimsize: 18.0,
-    drivetrain: 'AWD',
-    doors: '4/5',
-    type: 'SUV',
-    cruisecontrol: 0,
-    aircondition: 0,
-    navigation: 0,
-    registration: 0,
-    fuel: 'Diesel',
-    parkingsensors: 0,
-    transmission: 'Manual'
-  };
-
-  try {
-      const response = await fetch(url, {
-          method: 'POST',
-          headers: {
-              'Content-Type': 'application/json',
-          },
-          body: JSON.stringify(data),
-      });
-
-      if (!response.ok) {
-          throw new Error(`HTTP error! status: ${response.status}`);
-      }
-
-      const result = await response.json();
-      console.log('Prediction:', result.prediction);
-      console.log('Filtered Vehicles:', result.vehicles);
-  } catch (error) {
-      console.error('Error:', error);
-  }
+// Define the request payload with only type and year
+const payload = {
+  type: 'SUV',
+  year: 2022
 };
 
-testXGBoostPrediction();
+// Make the fetch request to the Flask server
+fetch('http://127.0.0.1:5000/get_XGBoost_prediction', {
+  method: 'POST',
+  headers: {
+      'Content-Type': 'application/json'
+  },
+  body: JSON.stringify(payload)
+})
+.then(response => response.json())
+.then(data => {
+  if (data.error) {
+      console.error('Error:', data.error);
+  } else {
+      console.log('Prediction:', data.prediction);
+      console.log('Vehicles:', data.vehicles);
+  }
+})
+.catch(error => {
+  console.error('Fetch Error:', error);
+});
+
 
 // //Fetch the data from the Flask server
 // fetch('http://localhost:5000/hist_plot')
