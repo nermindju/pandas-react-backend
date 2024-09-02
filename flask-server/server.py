@@ -9,6 +9,7 @@ import joblib
 from sklearn.preprocessing import LabelEncoder
 import matplotlib
 matplotlib.use('Agg')
+print("hedjks cjs kj skjc")
 
 app = Flask(__name__)
 CORS(app)
