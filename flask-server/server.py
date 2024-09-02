@@ -1,4 +1,4 @@
-from flask import Flask, jsonify, request
+from flask import Flask, jsonify, request, Response
 from flask_cors import CORS
 import pandas as pd
 import os
@@ -6,10 +6,16 @@ import traceback
 import re
 import numpy as np
 import joblib
+import math
 from sklearn.preprocessing import LabelEncoder
+from sklearn.model_selection import train_test_split
+from sklearn.metrics import r2_score, mean_absolute_error, mean_squared_error
+from xgboost import XGBRegressor
 import matplotlib
+from openai import OpenAI
 matplotlib.use('Agg')
-print("hedjks cjs kj skjc")
+
+pd.set_option("display.max_columns", None)
 
 app = Flask(__name__)
 CORS(app)
@@ -17,11 +23,102 @@ CORS(app)
 UPLOAD_FOLDER = 'uploads'
 os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
-
-
 global_df = None
-model_path = 'pandas-react-backend/flask-server/models/XGBoost_model.joblib'
+volkswagen_data=pd.read_csv('uploads/volkswagen_data.csv')
+model_path = 'flask-server/models/XGBoost_model.joblib'
 XGBoost_model = joblib.load(model_path)
+
+import logging
+logging.basicConfig(level=logging.DEBUG)
+
+api_key = os.getenv("OPENAI_API_KEY")
+client = OpenAI(api_key=api_key)
+
+@app.route('/get_ai_message', methods=['POST'])
+def get_ai_message():
+    try:
+        data = request.json
+        message = data.get('message')
+        messages = data.get('messages', [])
+
+        if not message:
+            print("No message provided")
+            return jsonify({"error": "Message is required"}), 400
+
+        ai_response = ""
+        stream = client.chat.completions.create(
+            model="ft:gpt-4o-mini-2024-07-18:personal::A2GTlhVH",
+            messages=[
+                {"role": "system", "content": "You are a helpful assistant."},
+                {"role": "system", "content": f"Relevant data: {volkswagen_data}"},
+                {"role": "system", "content": "The bot is a factual chatbot that provides pandas DataFrame queries."},
+                {"role": "user", "content": message}
+            ],
+            stream=True
+        )
+
+        for chunk in stream:
+            if chunk.choices[0].delta.content is not None:
+                ai_response += chunk.choices[0].delta.content
+
+        query = ai_response.split('Query: ')[-1].strip()
+        variable_name, expression = query.split('=', 1)
+        expression = expression.strip().replace('df', 'volkswagen_data')
+
+        try:
+            query_result = eval(expression)
+            print("query result: ", query_result)
+            if query_result is None:
+                raise ValueError("Query execution failed or no data found.")
+        except Exception as e:
+            print(f"Eval Error: {e}")
+            query_result = None
+
+        if query_result is None:
+            query_result_str = "No data available."
+        else:
+            query_result_str = str(query_result)
+        
+        gpt4o_mini_response = client.chat.completions.create(
+          model="gpt-4o-mini",
+          messages=[
+              {"role": "system", "content": "You are a helpful assistant."}, 
+              {"role": "system", "content": f"The user has retrieved data from a database about Volkswagen cars. Based on the provided data: {query_result_str}"},
+              {"role": "system", "content": "Your task is to answer the user's question accurately using only this data if it is relevant to the question."},
+              {"role": "system", "content": "When Using the provided data, mention that that answer is about cars on the page that the user is using."},
+              {"role": "user", "content": message},
+              *messages
+          ],
+          stream=True
+        )
+
+        final_response = ""
+        for chunk in gpt4o_mini_response:
+            if chunk.choices[0].delta.content is not None:
+                final_response += chunk.choices[0].delta.content
+
+        return jsonify({"ai_message": final_response})
+
+    except Exception as e:
+        print(f"Server Error: {e}")
+        return jsonify({"error": "Internal Server Error"}), 500
+
+    
+@app.route("/get_csv", methods=["GET"])
+def get_csv():
+    try:
+        if volkswagen_data is not None:
+            logging.info("DataFrame loaded successfully.")
+            logging.info("DataFrame shape: %s", volkswagen_data.shape)
+            
+            data = volkswagen_data.to_dict(orient="records")
+            return jsonify(data)
+        else:
+            logging.error("DataFrame is None.")
+            return jsonify({"error": "DataFrame is None"}), 400
+    except Exception as e:
+        logging.error("Error occurred: %s", traceback.format_exc())
+        return jsonify({"error": str(e)}), 500
 
 model_to_type = {
             'Arteon': 'Sedan', 'Passat': 'Sedan', 'Golf': 'Hatchback',
@@ -426,6 +523,55 @@ def upload_csv():
             vw_csv = 'volkswagen_data.csv'
             vw_csv_path = os.path.join(app.config['UPLOAD_FOLDER'], vw_csv)
             data_vw.to_csv(vw_csv_path, index=False)
+
+            #Preparing vw data for models
+            encoder = LabelEncoder()
+            model_data = data_vw.copy()
+            model_data['type_encoded'] = encoder.fit_transform(model_data['type'])
+            model_data['cruisecontrol'] = model_data['cruisecontrol'].astype('str')
+            model_data['cruisecontrol_encoded'] = encoder.fit_transform(model_data['cruisecontrol'])
+            # print(model_data[['cruisecontrol', 'cruisecontrol_encoded']].value_counts())
+            model_data['aircondition'] = model_data['aircondition'].astype('str')
+            model_data['aircondition_encoded'] = encoder.fit_transform(model_data['aircondition'])
+            model_data['navigation'] = model_data['navigation'].astype('str')
+            model_data['navigation_encoded'] = encoder.fit_transform(model_data['navigation'])
+            model_data['registration'] = model_data['registration'].astype('str')
+            model_data['registration_encoded'] = encoder.fit_transform(model_data['registration'])
+            model_data['parkingsensors'].replace('naprijed/nazad','Front and Rear', inplace=True)
+            model_data['parkingsensors'].replace('Nema', '-', inplace=True)
+            model_data['parkingsensors'].replace('nema', '-', inplace=True)
+            model_data['parkingsensors_encoded'] = encoder.fit_transform(model_data['parkingsensors'])
+            # print(model_data[['parkingsensors', 'parkingsensors_encoded']].value_counts()) 
+            model_data['transmission'] = model_data['transmission'].map({'Manual':0, 'Automatic':1, 'Semi-automatic':1})
+            model_data['fuel_encoded'] = encoder.fit_transform(model_data['fuel'])
+            model_data['drivetrain_encoded'] = encoder.fit_transform(model_data['drivetrain']) 
+            # print(model_data[['drivetrain', 'drivetrain_encoded']].value_counts())
+            model_data['doors_encoded'] = encoder.fit_transform(model_data['doors'])
+            # print(model_data[['doors', 'doors_encoded']].value_counts())
+            print(model_data.isnull().sum())
+
+            # Training XGBoost model for vw data
+            model_data['displacement'] = model_data['displacement'].astype('float')
+            model_data['kilowatts'] = model_data['kilowatts'].astype('int')
+            model_data['year'] = model_data['year'].astype('int')
+            X = model_data[['displacement', 'kilowatts', 'mileage', 'year', 'rimsize', 'drivetrain_encoded', 'doors_encoded', 'type_encoded', 'cruisecontrol_encoded', 'aircondition_encoded', 'navigation_encoded', 'registration_encoded', 'fuel_encoded', 'parkingsensors_encoded', 'transmission']]
+            Y = model_data['price']
+            X_train, X_test, y_train, y_test = train_test_split(X, Y, test_size=0.25, random_state=42)
+            model = XGBRegressor(gamma=0, max_depth=None, min_child_weight=5, n_estimators=100)
+            model.fit(X_train, y_train)
+
+            os.makedirs('models', exist_ok=True)
+            model_path = 'models/XGBoost_model.joblib'
+            joblib.dump(model, model_path)
+
+            y_prediction = model.predict(X_test)
+
+
+            print(r2_score(y_test, y_prediction))
+            print(math.sqrt(mean_squared_error(y_test, y_prediction)))
+            print(mean_absolute_error(y_test, y_prediction))
+
+
 
             # Convert data to JSON-serializable format
             data = data_vw.to_dict(orient="records")
@@ -969,7 +1115,7 @@ def get_top5_models_avg_price_data():
         
 
         # Format the data as required
-        top5_models_avg_price = [{"id": model, "average_price": avg_price} for model, avg_price in average_prices.items()]
+        top5_models_avg_price = [{"id": model, "value": avg_price} for model, avg_price in average_prices.items()]
 
         return jsonify(top5_models_avg_price)
 
@@ -980,7 +1126,7 @@ def get_top5_models_avg_price_data():
 @app.route("/map", methods=['GET'])
 def generate_map_data():
     try:
-        top_locations = pd.read_csv('pandas-react-backend/flask-server/location_map/geocoded_locations.csv')
+        top_locations = pd.read_csv('flask-server/location_map/geocoded_locations.csv')
     except FileNotFoundError:
         return {
             "error": "geocoded_locations.csv file not found."
@@ -1079,10 +1225,6 @@ def get_top5types_barplot_data():
 
 if __name__ == '__main__':
     app.run(debug=True)
-
-
-
-
 
 # @app.route("/group_by", methods=["POST"])
 # def group_by():
