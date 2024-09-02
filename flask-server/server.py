@@ -25,8 +25,7 @@ os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
 global_df = None
 volkswagen_data=pd.read_csv('uploads/volkswagen_data.csv')
-model_path = 'flask-server/models/XGBoost_model.joblib'
-XGBoost_model = joblib.load(model_path)
+
 
 import logging
 logging.basicConfig(level=logging.DEBUG)
@@ -524,55 +523,6 @@ def upload_csv():
             vw_csv_path = os.path.join(app.config['UPLOAD_FOLDER'], vw_csv)
             data_vw.to_csv(vw_csv_path, index=False)
 
-            #Preparing vw data for models
-            encoder = LabelEncoder()
-            model_data = data_vw.copy()
-            model_data['type_encoded'] = encoder.fit_transform(model_data['type'])
-            model_data['cruisecontrol'] = model_data['cruisecontrol'].astype('str')
-            model_data['cruisecontrol_encoded'] = encoder.fit_transform(model_data['cruisecontrol'])
-            # print(model_data[['cruisecontrol', 'cruisecontrol_encoded']].value_counts())
-            model_data['aircondition'] = model_data['aircondition'].astype('str')
-            model_data['aircondition_encoded'] = encoder.fit_transform(model_data['aircondition'])
-            model_data['navigation'] = model_data['navigation'].astype('str')
-            model_data['navigation_encoded'] = encoder.fit_transform(model_data['navigation'])
-            model_data['registration'] = model_data['registration'].astype('str')
-            model_data['registration_encoded'] = encoder.fit_transform(model_data['registration'])
-            model_data['parkingsensors'].replace('naprijed/nazad','Front and Rear', inplace=True)
-            model_data['parkingsensors'].replace('Nema', '-', inplace=True)
-            model_data['parkingsensors'].replace('nema', '-', inplace=True)
-            model_data['parkingsensors_encoded'] = encoder.fit_transform(model_data['parkingsensors'])
-            # print(model_data[['parkingsensors', 'parkingsensors_encoded']].value_counts()) 
-            model_data['transmission'] = model_data['transmission'].map({'Manual':0, 'Automatic':1, 'Semi-automatic':1})
-            model_data['fuel_encoded'] = encoder.fit_transform(model_data['fuel'])
-            model_data['drivetrain_encoded'] = encoder.fit_transform(model_data['drivetrain']) 
-            # print(model_data[['drivetrain', 'drivetrain_encoded']].value_counts())
-            model_data['doors_encoded'] = encoder.fit_transform(model_data['doors'])
-            # print(model_data[['doors', 'doors_encoded']].value_counts())
-            print(model_data.isnull().sum())
-
-            # Training XGBoost model for vw data
-            model_data['displacement'] = model_data['displacement'].astype('float')
-            model_data['kilowatts'] = model_data['kilowatts'].astype('int')
-            model_data['year'] = model_data['year'].astype('int')
-            X = model_data[['displacement', 'kilowatts', 'mileage', 'year', 'rimsize', 'drivetrain_encoded', 'doors_encoded', 'type_encoded', 'cruisecontrol_encoded', 'aircondition_encoded', 'navigation_encoded', 'registration_encoded', 'fuel_encoded', 'parkingsensors_encoded', 'transmission']]
-            Y = model_data['price']
-            X_train, X_test, y_train, y_test = train_test_split(X, Y, test_size=0.25, random_state=42)
-            model = XGBRegressor(gamma=0, max_depth=None, min_child_weight=5, n_estimators=100)
-            model.fit(X_train, y_train)
-
-            os.makedirs('models', exist_ok=True)
-            model_path = 'models/XGBoost_model.joblib'
-            joblib.dump(model, model_path)
-
-            y_prediction = model.predict(X_test)
-
-
-            print(r2_score(y_test, y_prediction))
-            print(math.sqrt(mean_squared_error(y_test, y_prediction)))
-            print(mean_absolute_error(y_test, y_prediction))
-
-
-
             # Convert data to JSON-serializable format
             data = data_vw.to_dict(orient="records")
             description = global_df.describe().round(2).replace({np.nan: None}).to_dict()
@@ -598,6 +548,81 @@ def standardize_model(model):
     return model
 
 
+def train_model(model_choice):
+    #Preparing vw data for models
+    encoder = LabelEncoder()
+    model_data = volkswagen_data.copy()
+    model_data['type_encoded'] = encoder.fit_transform(model_data['type'])
+    model_data['cruisecontrol'] = model_data['cruisecontrol'].astype('str')
+    model_data['cruisecontrol_encoded'] = encoder.fit_transform(model_data['cruisecontrol'])
+    # print(model_data[['cruisecontrol', 'cruisecontrol_encoded']].value_counts())
+    model_data['aircondition'] = model_data['aircondition'].astype('str')
+    model_data['aircondition_encoded'] = encoder.fit_transform(model_data['aircondition'])
+    model_data['navigation'] = model_data['navigation'].astype('str')
+    model_data['navigation_encoded'] = encoder.fit_transform(model_data['navigation'])
+    model_data['registration'] = model_data['registration'].astype('str')
+    model_data['registration_encoded'] = encoder.fit_transform(model_data['registration'])
+    model_data['parkingsensors'].replace('naprijed/nazad','Front and Rear', inplace=True)
+    model_data['parkingsensors'].replace('Nema', '-', inplace=True)
+    model_data['parkingsensors'].replace('nema', '-', inplace=True)
+    model_data['parkingsensors_encoded'] = encoder.fit_transform(model_data['parkingsensors'])
+    # print(model_data[['parkingsensors', 'parkingsensors_encoded']].value_counts()) 
+    model_data['transmission'] = model_data['transmission'].map({'Manual':0, 'Automatic':1, 'Semi-automatic':1})
+    model_data['fuel_encoded'] = encoder.fit_transform(model_data['fuel'])
+    model_data['drivetrain_encoded'] = encoder.fit_transform(model_data['drivetrain']) 
+    # print(model_data[['drivetrain', 'drivetrain_encoded']].value_counts())
+    model_data['doors_encoded'] = encoder.fit_transform(model_data['doors'])
+    # print(model_data[['doors', 'doors_encoded']].value_counts())
+
+    model_data['displacement'] = model_data['displacement'].astype('float')
+    model_data['kilowatts'] = model_data['kilowatts'].astype('int')
+    model_data['year'] = model_data['year'].astype('int')
+    X = model_data[['displacement', 'kilowatts', 'mileage', 'year', 'rimsize', 'drivetrain_encoded', 'doors_encoded', 'type_encoded', 'cruisecontrol_encoded', 'aircondition_encoded', 'navigation_encoded', 'registration_encoded', 'fuel_encoded', 'parkingsensors_encoded', 'transmission']]
+    Y = model_data['price']
+    X_train, X_test, y_train, y_test = train_test_split(X, Y, test_size=0.25, random_state=42)
+
+    # Train the chosen model
+    if model_choice == 'xgboost':
+        model = XGBRegressor(gamma=0, max_depth=None, min_child_weight=5, n_estimators=100)
+    elif model_choice == 'random_forest':
+        print('test')
+    else:
+        return False  # Return False for invalid model choice
+    model.fit(X_train, y_train)
+
+    os.makedirs('vw_models', exist_ok=True)
+    model_path = f'vw_models/{model_choice}_model.joblib'
+    joblib.dump(model, model_path)
+
+    y_prediction = model.predict(X_test)
+
+
+    print(r2_score(y_test, y_prediction))
+    print(math.sqrt(mean_squared_error(y_test, y_prediction)))
+    print(mean_absolute_error(y_test, y_prediction))
+
+    return True
+
+@app.route('/train_model', methods=['POST'])
+def handle_train_model():
+    try:
+        model_choice = request.json.get('model')
+        
+        if model_choice not in ['xgboost', 'random_forest']:
+            return jsonify({"message": "Invalid model choice"}), 400
+
+        success = train_model(model_choice)
+
+        if success:
+            return jsonify({"message": f"{model_choice.replace('_', ' ').capitalize()} model trained successfully"}), 200
+        else:
+            return jsonify({"message": f"Failed to train {model_choice.replace('_', ' ').capitalize()} model"}), 500
+
+    except Exception as e:
+        print(f"Error: {e}")
+        return jsonify({"message": "Internal server error"}), 500
+
+
 @app.route("/get_columns", methods=['GET'])
 def get_columns():
     if data_vw is None:
@@ -606,8 +631,10 @@ def get_columns():
     columns = data_vw.columns.tolist()
     return jsonify({"columns": columns})
 
-@app.route("/get_XGBoost_prediction", methods=['POST'])
+@app.route("/get_prediction", methods=['POST'])
 def get_prediction():
+    model_path = 'vw_models/XGBoost_model.joblib'
+    model = joblib.load(model_path)
     volkswagen_data = pd.read_csv('uploads/volkswagen_data.csv', encoding='utf-8')
     try:
         data = request.json
@@ -696,7 +723,7 @@ def get_prediction():
         features = np.array([features], dtype=np.float32)  # 2D array, dtype float32
 
         # Make the prediction
-        prediction = XGBoost_model.predict(features)[0]
+        prediction = model.predict(features)[0]
 
         # Apply filters only to the user-provided fields
         filtered_vehicles = volkswagen_data[

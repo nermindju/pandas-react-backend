@@ -1,29 +1,51 @@
-// Define the request payload with only type and year
-const data = {
-  type: 'SUV',
-  year: 2022
-};
+// // Define the request payload with only type and year
+// const data = {
+//   type: 'SUV',
+//   year: 2022
+// };
 
-// Make the fetch request to the Flask server
-fetch('http://127.0.0.1:5000/get_XGBoost_prediction', {
+// // Make the fetch request to the Flask server
+// fetch('http://127.0.0.1:5000/get_prediction', {
+//   method: 'POST',
+//   headers: {
+//       'Content-Type': 'application/json'
+//   },
+//   body: JSON.stringify(data)
+// })
+// .then(response => response.json())
+// .then(data => {
+//   if (data.error) {
+//       console.error('Error:', data.error);
+//   } else {
+//       console.log('Prediction:', data.prediction);
+//       console.log('Vehicles:', data.vehicles);
+//   }
+// })
+// .catch(error => {
+//   console.error('Fetch Error:', error);
+// });
+
+fetch('http://127.0.0.1:5000/train_model', {
   method: 'POST',
   headers: {
-      'Content-Type': 'application/json'
+      'Content-Type': 'application/json',
   },
-  body: JSON.stringify(data)
+  body: JSON.stringify({
+      model: 'xgboost'  // Change this to 'random_forest' to test the other model
+  }),
 })
-.then(response => response.json())
+.then(response => response.json())  // Parse the response as JSON
 .then(data => {
-  if (data.error) {
-      console.error('Error:', data.error);
-  } else {
-      console.log('Prediction:', data.prediction);
-      console.log('Vehicles:', data.vehicles);
-  }
+  console.log('Response:', data.message);  // Log the message from the server
 })
-.catch(error => {
+.catch((error) => {
   console.error('Fetch Error:', error);
 });
+
+
+
+
+
 
 
 // //Fetch the data from the Flask server
