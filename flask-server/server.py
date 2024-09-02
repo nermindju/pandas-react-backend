@@ -24,6 +24,7 @@ UPLOAD_FOLDER = 'uploads'
 os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
 global_df = None
+global_data = None
 volkswagen_data=pd.read_csv('uploads/volkswagen_data.csv')
 
 
@@ -548,6 +549,13 @@ def standardize_model(model):
     return model
 
 
+def load_data(brand):
+    global global_data
+    file_name = f'uploads/{brand}_data.csv'
+    global_data = pd.read_csv(file_name)
+    return global_data
+
+
 def train_model(model_choice):
     #Preparing vw data for models
     encoder = LabelEncoder()
@@ -623,12 +631,26 @@ def handle_train_model():
         return jsonify({"message": "Internal server error"}), 500
 
 
+@app.route("/select_brand", methods=["POST"])
+def select_brand():
+    brand = request.json.get('brand')
+    if brand:
+        try:
+            load_data(brand)
+            return jsonify({"message": f"Brand '{brand}' data loaded."})
+        except Exception as e:
+            return jsonify({"error": str(e)}), 500
+    else:
+        return jsonify({"error": "No brand selected."}), 400
+
+
+
 @app.route("/get_columns", methods=['GET'])
 def get_columns():
-    if data_vw is None:
+    if global_data is None:
         return jsonify({"error": "No data available. Please upload a CSV file first."}), 400
     
-    columns = data_vw.columns.tolist()
+    columns = global_data.columns.tolist()
     return jsonify({"columns": columns})
 
 @app.route("/get_prediction", methods=['POST'])
