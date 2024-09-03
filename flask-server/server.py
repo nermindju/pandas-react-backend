@@ -1,4 +1,4 @@
-from flask import Flask, jsonify, request
+from flask import Flask, jsonify, request, Response
 from flask_cors import CORS
 import pandas as pd
 import os
@@ -6,10 +6,17 @@ import traceback
 import re
 import numpy as np
 import joblib
+import math
 from sklearn.preprocessing import LabelEncoder
+from sklearn.model_selection import train_test_split
+from sklearn.metrics import r2_score, mean_absolute_error, mean_squared_error
+from xgboost import XGBRegressor
+from sklearn.ensemble import RandomForestRegressor
 import matplotlib
+from openai import OpenAI
 matplotlib.use('Agg')
-print("hedjks cjs kj skjc")
+
+pd.set_option("display.max_columns", None)
 
 app = Flask(__name__)
 CORS(app)
@@ -17,11 +24,116 @@ CORS(app)
 UPLOAD_FOLDER = 'uploads'
 os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
-
-
 global_df = None
-model_path = 'pandas-react-backend/flask-server/models/XGBoost_model.joblib'
-XGBoost_model = joblib.load(model_path)
+global_data = pd.read_csv('uploads/volkswagen_data.csv')
+global_model_choice = 'xgboost'
+selected_brand = 'volkswagen'
+volkswagen_data=pd.read_csv('uploads/volkswagen_data.csv')
+# model_path = f'{selected_brand}_models/{global_model_choice}_model.joblib'
+# model = joblib.load(model_path)
+
+# try:
+#     model = joblib.load(model_path)
+#     print("Model loaded successfully.")
+# except FileNotFoundError:
+#     model = None
+#     print(f"Error: Model file not found at {model_path}.")
+# except Exception as e:
+#     model = None
+#     print(f"An error occurred while loading the model: {e}")
+
+
+import logging
+logging.basicConfig(level=logging.DEBUG)
+
+api_key = os.getenv("OPENAI_API_KEY")
+client = OpenAI(api_key=api_key)
+
+@app.route('/get_ai_message', methods=['POST'])
+def get_ai_message():
+    try:
+        data = request.json
+        message = data.get('message')
+        messages = data.get('messages', [])
+
+        if not message:
+            print("No message provided")
+            return jsonify({"error": "Message is required"}), 400
+
+        ai_response = ""
+        stream = client.chat.completions.create(
+            model="ft:gpt-4o-mini-2024-07-18:personal::A2GTlhVH",
+            messages=[
+                {"role": "system", "content": "You are a helpful assistant."},
+                {"role": "system", "content": f"Relevant data: {volkswagen_data}"},
+                {"role": "system", "content": "The bot is a factual chatbot that provides pandas DataFrame queries."},
+                {"role": "user", "content": message}
+            ],
+            stream=True
+        )
+
+        for chunk in stream:
+            if chunk.choices[0].delta.content is not None:
+                ai_response += chunk.choices[0].delta.content
+
+        query = ai_response.split('Query: ')[-1].strip()
+        variable_name, expression = query.split('=', 1)
+        expression = expression.strip().replace('df', 'volkswagen_data')
+
+        try:
+            query_result = eval(expression)
+            print("query result: ", query_result)
+            if query_result is None:
+                raise ValueError("Query execution failed or no data found.")
+        except Exception as e:
+            print(f"Eval Error: {e}")
+            query_result = None
+
+        if query_result is None:
+            query_result_str = "No data available."
+        else:
+            query_result_str = str(query_result)
+        
+        gpt4o_mini_response = client.chat.completions.create(
+          model="gpt-4o-mini",
+          messages=[
+              {"role": "system", "content": "You are a helpful assistant."}, 
+              {"role": "system", "content": f"The user has retrieved data from a database about Volkswagen cars. Based on the provided data: {query_result_str}"},
+              {"role": "system", "content": "Your task is to answer the user's question accurately using only this data if it is relevant to the question."},
+              {"role": "system", "content": "When Using the provided data, mention that that answer is about cars on the page that the user is using."},
+              {"role": "user", "content": message},
+              *messages
+          ],
+          stream=True
+        )
+
+        final_response = ""
+        for chunk in gpt4o_mini_response:
+            if chunk.choices[0].delta.content is not None:
+                final_response += chunk.choices[0].delta.content
+
+        return jsonify({"ai_message": final_response})
+
+    except Exception as e:
+        print(f"Server Error: {e}")
+        return jsonify({"error": "Internal Server Error"}), 500
+
+    
+@app.route("/get_csv", methods=["GET"])
+def get_csv():
+    try:
+        if global_data is not None:
+            logging.info("DataFrame loaded successfully.")
+            logging.info("DataFrame shape: %s", global_data.shape)
+            
+            data = global_data.to_dict(orient="records")
+            return jsonify(data)
+        else:
+            logging.error("DataFrame is None.")
+            return jsonify({"error": "DataFrame is None"}), 400
+    except Exception as e:
+        logging.error("Error occurred: %s", traceback.format_exc())
+        return jsonify({"error": str(e)}), 500
 
 model_to_type = {
             'Arteon': 'Sedan', 'Passat': 'Sedan', 'Golf': 'Hatchback',
@@ -422,15 +534,19 @@ def upload_csv():
             numeric_vw_data = data_vw[['price', 'mileage', 'displacement', 'kilowatts', 'year']]
             numeric_vw_data = numeric_vw_data.replace({np.nan: None})
 
+
+
             # Save the Volkswagen data as a CSV file
             vw_csv = 'volkswagen_data.csv'
             vw_csv_path = os.path.join(app.config['UPLOAD_FOLDER'], vw_csv)
             data_vw.to_csv(vw_csv_path, index=False)
 
+
+
             # Convert data to JSON-serializable format
             data = data_vw.to_dict(orient="records")
             description = global_df.describe().round(2).replace({np.nan: None}).to_dict()
-
+            print(data_vw.isnull().sum())
             return jsonify({
                 "data": data,
                 "shape": global_df.shape,
@@ -452,17 +568,150 @@ def standardize_model(model):
     return model
 
 
+def load_data(brand):
+    global global_data, selected_brand
+    selected_brand = brand
+    file_name = f'uploads/{brand}_data.csv'
+    global_data = pd.read_csv(file_name)
+    return global_data
+
+
+def train_model(model_choice):
+    
+    # Load datasets for Audi and Volkswagen
+    audi_data = pd.read_csv('uploads/audi_data.csv')
+    vw_data = pd.read_csv('uploads/volkswagen_data.csv')
+    
+    data_dict = {
+        'audi': audi_data,
+        'volkswagen': vw_data
+    }
+    
+    for brand, data in data_dict.items():
+        if data.empty:
+            print(f"No data available for {brand}")
+            continue
+
+        # Preparing data for models
+        encoder = LabelEncoder()
+        model_data = data.copy()
+        model_data['type_encoded'] = encoder.fit_transform(model_data['type'])
+        model_data['cruisecontrol'] = model_data['cruisecontrol'].astype('str')
+        model_data['cruisecontrol_encoded'] = encoder.fit_transform(model_data['cruisecontrol'])
+        model_data['aircondition'] = model_data['aircondition'].astype('str')
+        model_data['aircondition_encoded'] = encoder.fit_transform(model_data['aircondition'])
+        model_data['navigation'] = model_data['navigation'].astype('str')
+        model_data['navigation_encoded'] = encoder.fit_transform(model_data['navigation'])
+        model_data['registration'] = model_data['registration'].astype('str')
+        model_data['registration_encoded'] = encoder.fit_transform(model_data['registration'])
+        model_data['parkingsensors'].replace('naprijed/nazad', 'Front and Rear', inplace=True)
+        model_data['parkingsensors'].replace(['Nema', 'nema'], '-', inplace=True)
+        model_data['parkingsensors_encoded'] = encoder.fit_transform(model_data['parkingsensors'])
+        model_data['transmission'] = model_data['transmission'].map({'Manual': 0, 'Automatic': 1, 'Semi-automatic': 1})
+        model_data['fuel_encoded'] = encoder.fit_transform(model_data['fuel'])
+        model_data['drivetrain_encoded'] = encoder.fit_transform(model_data['drivetrain'])
+        model_data['doors_encoded'] = encoder.fit_transform(model_data['doors'])
+
+        model_data['displacement'] = model_data['displacement'].astype('float')
+        model_data['kilowatts'] = model_data['kilowatts'].astype('int')
+        model_data['year'] = model_data['year'].astype('int')
+        
+        X = model_data[['displacement', 'kilowatts', 'mileage', 'year', 'rimsize', 'drivetrain_encoded', 
+                        'doors_encoded', 'type_encoded', 'cruisecontrol_encoded', 'aircondition_encoded', 
+                        'navigation_encoded', 'registration_encoded', 'fuel_encoded', 'parkingsensors_encoded', 
+                        'transmission']]
+        Y = model_data['price']
+        
+        X_train, X_test, y_train, y_test = train_test_split(X, Y, test_size=0.25, random_state=42)
+
+        # Train the chosen model
+        if model_choice == 'xgboost':
+            model = XGBRegressor(gamma=0, max_depth=None, min_child_weight=5, n_estimators=100)
+        elif model_choice == 'random_forest':
+            model = RandomForestRegressor(max_depth=20, min_samples_leaf=1, min_samples_split=5, n_estimators=300)
+        else:
+            print(f"Invalid model choice for {brand}")
+            return False  # Return False for invalid model choice
+        
+        model.fit(X_train, y_train)
+
+        os.makedirs(f'{brand}_models', exist_ok=True)
+        model_path = f'{brand}_models/{model_choice}_model.joblib'
+        joblib.dump(model, model_path)
+
+        y_prediction = model.predict(X_test)
+
+        print(f"Results for {brand}:")
+        print(f"R2 Score: {r2_score(y_test, y_prediction)}")
+        print(f"RMSE: {math.sqrt(mean_squared_error(y_test, y_prediction))}")
+        print(f"MAE: {mean_absolute_error(y_test, y_prediction)}")
+
+    return True
+
+
+
+@app.route('/train_model', methods=['POST'])
+def handle_train_model():
+    try:
+        model_choice = request.json.get('model')
+        
+        if model_choice not in ['xgboost', 'random_forest']:
+            return jsonify({"message": "Invalid model choice"}), 400
+
+        success = train_model(model_choice)
+
+        if success:
+            return jsonify({"message": f"{model_choice.replace('_', ' ').capitalize()} model trained successfully"}), 200
+        else:
+            return jsonify({"message": f"Failed to train {model_choice.replace('_', ' ').capitalize()} model"}), 500
+
+    except Exception as e:
+        print(f"Error: {e}")
+        return jsonify({"message": "Internal server error"}), 500
+
+
+@app.route("/select_brand", methods=["POST"])
+def select_brand():
+    brand = request.json.get('brand')
+    if brand:
+        try:
+            load_data(brand)
+            return jsonify({"message": f"Brand '{brand}' data loaded."})
+        except Exception as e:
+            return jsonify({"error": str(e)}), 500
+    else:
+        return jsonify({"error": "No brand selected."}), 400
+
+
+@app.route('/set_model_choice', methods=['POST'])
+def set_model_choice():
+    global global_model_choice
+    data = request.json
+    
+    model_choice = data.get('model_choice')
+    
+    if model_choice in ['xgboost', 'random_forest']:
+        global_model_choice = model_choice
+        return jsonify({'status': 'success', 'message': f'Model choice set to {model_choice}'}), 200
+    else:
+        return jsonify({'status': 'error', 'message': 'Invalid model choice'}), 400
+
+
 @app.route("/get_columns", methods=['GET'])
 def get_columns():
-    if data_vw is None:
+    if global_data is None:
         return jsonify({"error": "No data available. Please upload a CSV file first."}), 400
     
-    columns = data_vw.columns.tolist()
+    columns = global_data.columns.tolist()
     return jsonify({"columns": columns})
 
-@app.route("/get_XGBoost_prediction", methods=['POST'])
+@app.route("/get_prediction", methods=['POST'])
 def get_prediction():
-    volkswagen_data = pd.read_csv('uploads/volkswagen_data.csv', encoding='utf-8')
+    model_path = f'{selected_brand}_models/{global_model_choice}_model.joblib'
+    model = joblib.load(model_path)
+    model_data = pd.read_csv(f'uploads/{selected_brand}_data.csv')
+    print(global_model_choice)
+    print(selected_brand)
     try:
         data = request.json
 
@@ -474,9 +723,9 @@ def get_prediction():
             return jsonify({"error": "Vehicle type and year are required"}), 400
 
         # Filter data by the provided type and year to calculate modes
-        filtered_data = volkswagen_data[
-            (volkswagen_data['type'] == vehicle_type_str) &
-            (volkswagen_data['year'] == int(year_value))
+        filtered_data = model_data[
+            (model_data['type'] == vehicle_type_str) &
+            (model_data['year'] == int(year_value))
         ]
 
         # If no data found for the given type and year, return an error
@@ -550,15 +799,15 @@ def get_prediction():
         features = np.array([features], dtype=np.float32)  # 2D array, dtype float32
 
         # Make the prediction
-        prediction = XGBoost_model.predict(features)[0]
+        prediction = model.predict(features)[0].round(2)
 
         # Apply filters only to the user-provided fields
-        filtered_vehicles = volkswagen_data[
-            (volkswagen_data['type'] == vehicle_type_str) & 
-            (volkswagen_data['year'] >= int(year_value) - 3) &
-            (volkswagen_data['year'] <= int(year_value) + 3) &
-            (volkswagen_data['price'] >= prediction - 5000) &
-            (volkswagen_data['price'] <= prediction + 5000)
+        filtered_vehicles = model_data[
+            (model_data['type'] == vehicle_type_str) & 
+            (model_data['year'] >= int(year_value) - 3) &
+            (model_data['year'] <= int(year_value) + 3) &
+            (model_data['price'] >= prediction - 5000) &
+            (model_data['price'] <= prediction + 5000)
         ]
 
         if 'kilowatts' in data and data['kilowatts'] not in [None, ""]:
@@ -605,10 +854,8 @@ def get_prediction():
 
 @app.route("/hist_plot", methods=["GET"])
 def get_hist_plot_data():
-
-    volkswagen_data = pd.read_csv('uploads/volkswagen_data.csv')
     try:
-        if volkswagen_data is None:
+        if global_data is None:
             return jsonify({"error": "No data available. Please upload a CSV file first."}), 400
         
         # Define the price ranges
@@ -616,10 +863,10 @@ def get_hist_plot_data():
         labels = ['$0-$5000', '$5000-$15000', '$15000-$30000', '$30000-$50000', '$50000-$70000', '$70000+']
 
         # Categorize the prices into the defined ranges
-        volkswagen_data['Price Range'] = pd.cut(volkswagen_data['price'], bins=bins, labels=labels, right=False)
+        global_data['Price Range'] = pd.cut(global_data['price'], bins=bins, labels=labels, right=False)
 
         # Count the number of vehicles in each price range
-        range_counts = volkswagen_data['Price Range'].value_counts().sort_index()
+        range_counts = global_data['Price Range'].value_counts().sort_index()
 
         # Convert to the desired format
         data = [{"priceRange": price_range, "count": count} for price_range, count in range_counts.items()]
@@ -631,14 +878,12 @@ def get_hist_plot_data():
 
 @app.route("/model_ranking", methods=["GET"])
 def get_model_ranking_data():
-    volkswagen_data = pd.read_csv('uploads/volkswagen_data.csv')
-
     try:
-        if volkswagen_data is None or 'model' not in volkswagen_data.columns:
+        if global_data is None or 'model' not in global_data.columns:
             return jsonify({"error": "No data available or 'model' column is missing."}), 400
 
         # Count the occurrences of each car model
-        model_counts = volkswagen_data['model'].value_counts().head(5)
+        model_counts = global_data['model'].value_counts().head(5)
 
         # Format the data as required
         top_models = [{"id": model, "value": count} for model, count in model_counts.items()]
@@ -650,15 +895,13 @@ def get_model_ranking_data():
 
 @app.route("/models_average_price", methods=['GET'])
 def get_models_average_price():
-    volkswagen_data = pd.read_csv('uploads/volkswagen_data.csv')
-
     try:
-        if volkswagen_data is None or 'model' not in volkswagen_data.columns:
+        if global_data is None or 'model' not in global_data.columns:
             return jsonify({"error": "No data available or 'model' column is missing"}), 400
         
-        top_25_models = volkswagen_data['model'].value_counts().head(25).index.tolist()
+        top_25_models = global_data['model'].value_counts().head(25).index.tolist()
         
-        filtered_df = volkswagen_data[volkswagen_data['model'].isin(top_25_models)]
+        filtered_df = global_data[global_data['model'].isin(top_25_models)]
         
         average_prices = filtered_df.groupby('model')['price'].mean().round(2).reset_index()
         average_prices_list = average_prices.to_dict(orient='records')
@@ -673,24 +916,20 @@ def get_models_average_price():
 
 @app.route("/get_models_price_box", methods=["GET"])
 def get_models_price_box_data():
-    volkswagen_data = pd.read_csv('uploads/volkswagen_data.csv')
-
-
-
     try:
-        if volkswagen_data is None:
+        if global_data is None:
             return jsonify({"error": "No data available. Please upload a CSV file first."}), 400
         
         # Get the top 10 models by value counts
-        top_10_models = volkswagen_data['model'].value_counts().head(10).index.tolist()
+        top_10_models = global_data['model'].value_counts().head(10).index.tolist()
 
         # Define the vehicle types to include
         selected_types = ['SUV', 'Hatchback', 'Sedan', 'Caravan']
 
         # Filter the dataset based on the selected types and top 10 models
-        filtered_data = volkswagen_data[
-            (volkswagen_data['type'].isin(selected_types)) & 
-            (volkswagen_data['model'].isin(top_10_models))
+        filtered_data = global_data[
+            (global_data['type'].isin(selected_types)) & 
+            (global_data['model'].isin(top_10_models))
         ]
 
         # Group the data and calculate price statistics
@@ -731,13 +970,12 @@ def get_models_price_box_data():
 
 @app.route("/type_minmax_price", methods=['GET'])
 def get_type_minmax_price():
-    volkswagen_data = pd.read_csv('uploads/volkswagen_data.csv')
     try:
-        if volkswagen_data is None or 'type' not in volkswagen_data.columns:
+        if global_data is None or 'type' not in global_data.columns:
             return jsonify({"error": "No data available or 'type' column is missing"}), 400
         
         # Group data by 'type' and calculate min and max prices
-        grouped_data = volkswagen_data.groupby(['type'])['price'].agg([
+        grouped_data = global_data.groupby(['type'])['price'].agg([
             ('minPrice', 'min'),
             ('maxPrice', 'max')
         ]).reset_index()
@@ -760,13 +998,11 @@ def get_type_minmax_price():
 
 @app.route("/model_listings", methods=['GET'])
 def model_listings():
-
-    volkswagen_data = pd.read_csv('uploads/volkswagen_data.csv')
     try:
-        if volkswagen_data is None or 'type' not in volkswagen_data.columns or 'model' not in volkswagen_data.columns:
+        if global_data is None or 'type' not in global_data.columns or 'model' not in global_data.columns:
             return jsonify({"error": "No data available or 'type'/'model' column is missing"}), 400
 
-        modelCounts = volkswagen_data['model'].value_counts().to_dict()
+        modelCounts = global_data['model'].value_counts().to_dict()
 
         response_data = {
             'model_to_type': model_to_type,
@@ -781,17 +1017,15 @@ def model_listings():
     
 @app.route("/get_line_plot_data", methods=['GET'])
 def get_line_plot_data():
-    volkswagen_data = pd.read_csv('uploads/volkswagen_data.csv')
-    
     try:
-        if volkswagen_data is None or 'model' not in volkswagen_data.columns or 'price' not in volkswagen_data.columns:
+        if global_data is None or 'model' not in global_data.columns or 'price' not in global_data.columns:
             return jsonify({"error": "No data available or 'model'/'price' column is missing"}), 400
         
         # Get the top 5 models by count
-        top_models = volkswagen_data['model'].value_counts().nlargest(5).index.tolist()
+        top_models = global_data['model'].value_counts().nlargest(5).index.tolist()
 
         # Filter data for only these top models
-        filtered_data = volkswagen_data[volkswagen_data['model'].isin(top_models)]
+        filtered_data = global_data[global_data['model'].isin(top_models)]
         
         # Group data by model and calculate min and median prices
         grouped_data = filtered_data.groupby('model')['price'].agg([
@@ -823,16 +1057,14 @@ def get_line_plot_data():
 
 @app.route('/get_prices', methods=['GET'])
 def get_prices():
-    volkswagen_data = pd.read_csv('uploads/volkswagen_data.csv')
-
     try:
-        if volkswagen_data is None or 'price' not in volkswagen_data.columns:
+        if global_data is None or 'price' not in global_data.columns:
             return jsonify({"error": "No data available or 'price' column is missing"}), 400
     
-        avg_price = volkswagen_data['price'].mean().round(2)
-        median_price = volkswagen_data['price'].median().round(2)
-        quantile_price_25 = volkswagen_data['price'].quantile(0.25).round(2)
-        quantile_price_75 = volkswagen_data['price'].quantile(0.75).round(2)
+        avg_price = global_data['price'].mean().round(2)
+        median_price = global_data['price'].median().round(2)
+        quantile_price_25 = global_data['price'].quantile(0.25).round(2)
+        quantile_price_75 = global_data['price'].quantile(0.75).round(2)
 
         return jsonify({
             'mean_price': avg_price,
@@ -849,23 +1081,20 @@ def get_prices():
 def get_correlation_heatmap():
     try:
         encoder = LabelEncoder()
-        # Load the data
-        data = pd.read_csv('uploads/volkswagen_data.csv')
-
-        data['type'] = data['type'].map(vehicle_type_mapping)
-        data['transmission'] = data['transmission'].map({'Manual':0, 'Automatic':1, 'Semi-automatic':1})
+        global_data['type'] = global_data['type'].map(vehicle_type_mapping)
+        global_data['transmission'] = global_data['transmission'].map({'Manual':0, 'Automatic':1, 'Semi-automatic':1})
         # data['cruisecontrol'] = encoder.fit_transform(data['cruisecontrol'])
         # data['navigation'] = encoder.fit_transform(data['navigation'])
         # data['aircondition'] = encoder.fit_transform(data['aircondition'])
         # data['registration'] = encoder.fit_transform(data['registration'])
         # data['parkingsensors'] = encoder.fit_transform(data['parkingsensors'])
-        data['fuel'] = encoder.fit_transform(data['fuel'])
-        data['drivetrain'] = encoder.fit_transform(data['drivetrain'])
+        global_data['fuel'] = encoder.fit_transform(global_data['fuel'])
+        global_data['drivetrain'] = encoder.fit_transform(global_data['drivetrain'])
         # data['doors'] = encoder.fit_transform(data['doors'])
         
         # Filter only numeric data for the selected column
 
-        numeric_data = data.select_dtypes(include='number')
+        numeric_data = global_data.select_dtypes(include='number')
         
         # Calculate the correlation matrix
         correlation_matrix = numeric_data.corr().round(2)
@@ -889,13 +1118,10 @@ def get_correlation_heatmap():
 @app.route('/get_scatterplot_data', methods=['GET'])
 def get_scatterplot_data():
     try:
-        # Load the data from the CSV file
-        data = pd.read_csv('uploads/volkswagen_data.csv')
-        
-        if 'price' not in data.columns or 'year' not in data.columns or 'type' not in data.columns:
+        if 'price' not in global_data.columns or 'year' not in global_data.columns or 'type' not in global_data.columns:
             return jsonify({"error": "'price', 'year', or 'type' column is missing"}), 400
             
-        grouped_data = data.groupby('type')
+        grouped_data = global_data.groupby('type')
         
         # Prepare the scatterplot data
         scatterplot_data = []
@@ -914,17 +1140,15 @@ def get_scatterplot_data():
 
 @app.route("/get_line_plot_data_prices", methods=['GET'])
 def get_line_plot_data_prices():
-    volkswagen_data = pd.read_csv('uploads/volkswagen_data.csv')
-    
     try:
-        if volkswagen_data is None or 'type' not in volkswagen_data.columns or 'price' not in volkswagen_data.columns:
+        if global_data is None or 'type' not in global_data.columns or 'price' not in global_data.columns:
             return jsonify({"error": "No data available or 'type'/'price' column is missing"}), 400
         
         # Get the top 5 models by count
-        top_models = volkswagen_data['type'].value_counts().nlargest(5).index.tolist()
+        top_models = global_data['type'].value_counts().nlargest(5).index.tolist()
 
         # Filter data for only these top models
-        filtered_data = volkswagen_data[volkswagen_data['type'].isin(top_models)]
+        filtered_data = global_data[global_data['type'].isin(top_models)]
         
         # Group data by model and calculate min and median prices
         grouped_data = filtered_data.groupby('type')['price'].agg([
@@ -955,21 +1179,19 @@ def get_line_plot_data_prices():
 
 @app.route("/get_top5_models_avg_price_data", methods=["GET"])
 def get_top5_models_avg_price_data():
-    volkswagen_data = pd.read_csv('uploads/volkswagen_data.csv')
-
     try:
-        if volkswagen_data is None or 'model' not in volkswagen_data.columns:
+        if global_data is None or 'model' not in global_data.columns:
             return jsonify({"error": "No data available or 'model' column is missing."}), 400
 
 
         # Get top 5 models
-        top5_models = volkswagen_data['model'].value_counts().head(5).index
+        top5_models = global_data['model'].value_counts().head(5).index
         # Average price for each model
-        average_prices = volkswagen_data[volkswagen_data['model'].isin(top5_models)].groupby('model')['price'].mean().round(2).sort_values(ascending=False)
+        average_prices = global_data[global_data['model'].isin(top5_models)].groupby('model')['price'].mean().round(2).sort_values(ascending=False)
         
 
         # Format the data as required
-        top5_models_avg_price = [{"id": model, "average_price": avg_price} for model, avg_price in average_prices.items()]
+        top5_models_avg_price = [{"id": model, "value": avg_price} for model, avg_price in average_prices.items()]
 
         return jsonify(top5_models_avg_price)
 
@@ -980,7 +1202,7 @@ def get_top5_models_avg_price_data():
 @app.route("/map", methods=['GET'])
 def generate_map_data():
     try:
-        top_locations = pd.read_csv('pandas-react-backend/flask-server/location_map/geocoded_locations.csv')
+        top_locations = pd.read_csv('flask-server/location_map/geocoded_locations.csv')
     except FileNotFoundError:
         return {
             "error": "geocoded_locations.csv file not found."
@@ -998,14 +1220,12 @@ def generate_map_data():
 
 @app.route("/get_top5models_barplot_data", methods=['GET'])
 def get_top5models_barplot_data():
-    volkswagen_data = pd.read_csv('uploads/volkswagen_data.csv')
-
     try:
-        if volkswagen_data is None or 'model' not in volkswagen_data.columns or 'price' not in volkswagen_data.columns:
+        if global_data is None or 'model' not in global_data.columns or 'price' not in global_data.columns:
             return jsonify({"error": "No data available or 'model' column is missing."}), 400
 
         # Filter data for years >= 1990
-        data = volkswagen_data[volkswagen_data['year'] >= 1990]
+        data = global_data[global_data['year'] >= 1990]
 
         # Create 5-year range column
         data['year_range'] = pd.cut(data['year'], bins=range(1990, 2026, 5), right=False, labels=[f"{i}-{i+4}" for i in range(1990, 2021, 5)])
@@ -1039,14 +1259,12 @@ def get_top5models_barplot_data():
 
 @app.route("/get_top5types_barplot_data", methods=['GET'])
 def get_top5types_barplot_data():
-    volkswagen_data = pd.read_csv('uploads/volkswagen_data.csv')
-
     try:
-        if volkswagen_data is None or 'type' not in volkswagen_data.columns or 'price' not in volkswagen_data.columns:
+        if global_data is None or 'type' not in global_data.columns or 'price' not in global_data.columns:
             return jsonify({"error": "No data available or 'model' column is missing."}), 400
 
         # Filter data for years >= 1990
-        data = volkswagen_data[volkswagen_data['year'] >= 1990]
+        data = global_data[global_data['year'] >= 1990]
 
         # Create 5-year range column
         data['year_range'] = pd.cut(data['year'], bins=range(1990, 2026, 5), right=False, labels=[f"{i}-{i+4}" for i in range(1990, 2021, 5)])
@@ -1079,10 +1297,6 @@ def get_top5types_barplot_data():
 
 if __name__ == '__main__':
     app.run(debug=True)
-
-
-
-
 
 # @app.route("/group_by", methods=["POST"])
 # def group_by():
