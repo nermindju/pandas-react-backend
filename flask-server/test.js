@@ -31,7 +31,7 @@
 //       'Content-Type': 'application/json',
 //   },
 //   body: JSON.stringify({
-//       model: 'xgboost'  // Change this to 'random_forest' to test the other model
+//       model: 'xgboost'
 //   }),
 // })
 // .then(response => response.json())  // Parse the response as JSON
@@ -42,20 +42,36 @@
 //   console.error('Fetch Error:', error);
 // });
 
-// Example to select 'audi' as the brand
-fetch('http://127.0.0.1:5000/select_brand', {
-  method: 'POST',
-  headers: {
-      'Content-Type': 'application/json'
-  },
-  body: JSON.stringify({ brand: 'volkswagen' })
-})
-.then(response => response.json())
-.then(data => console.log(data))
-.catch(error => console.error('Error:', error));
+// // Example to select 'volkswagen' as the brand
+// fetch('http://127.0.0.1:5000/select_brand', {
+//   method: 'POST',
+//   headers: {
+//       'Content-Type': 'application/json'
+//   },
+//   body: JSON.stringify({ brand: 'audi' })
+// })
+// .then(response => response.json())
+// .then(data => console.log(data))
+// .catch(error => console.error('Error:', error));
 
 
 
+// // // Model choice to send
+// const modelChoice = 'random_forest';  // or 'random_forest'
+
+// // Sending the POST request
+// fetch('http://127.0.0.1:5000/set_model_choice', {
+//     method: 'POST',
+//     headers: {
+//         'Content-Type': 'application/json',
+//     },
+//     body: JSON.stringify({ model_choice: modelChoice }),
+// })
+// .then(response => response.json())
+// .then(data => {
+//     console.log(data);
+// })
+// .catch(error => console.error('Error:', error));
 
 
 
