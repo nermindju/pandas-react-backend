@@ -586,6 +586,8 @@ def train_model(model_choice):
         'audi': audi_data,
         'volkswagen': vw_data
     }
+
+    results = {}
     
     for brand, data in data_dict.items():
         if data.empty:
@@ -641,12 +643,19 @@ def train_model(model_choice):
 
         y_prediction = model.predict(X_test)
 
-        print(f"Results for {brand}:")
-        print(f"R2 Score: {r2_score(y_test, y_prediction)}")
-        print(f"RMSE: {math.sqrt(mean_squared_error(y_test, y_prediction))}")
-        print(f"MAE: {mean_absolute_error(y_test, y_prediction)}")
+        # Calculate metrics
+        r2 = round(r2_score(y_test, y_prediction), 2)
+        rmse = round(math.sqrt(mean_squared_error(y_test, y_prediction)), 2)
+        mae = round(mean_absolute_error(y_test, y_prediction), 2)
 
-    return True
+        # Store the results for the current brand
+        results[brand] = {
+            'R2 Score': r2,
+            'RMSE': rmse,
+            'MAE': mae
+        }
+
+    return results
 
 
 
@@ -661,7 +670,8 @@ def handle_train_model():
         success = train_model(model_choice)
 
         if success:
-            return jsonify({"message": f"{model_choice.replace('_', ' ').capitalize()} model trained successfully"}), 200
+            return jsonify({"message": f"{model_choice.replace('_', ' ').capitalize()} model trained successfully",
+                            'results':success}), 200
         else:
             return jsonify({"message": f"Failed to train {model_choice.replace('_', ' ').capitalize()} model"}), 500
 

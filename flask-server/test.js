@@ -25,24 +25,24 @@
 //   console.error('Fetch Error:', error);
 // });
 
-// fetch('http://127.0.0.1:5000/train_model', {
-//   method: 'POST',
-//   headers: {
-//       'Content-Type': 'application/json',
-//   },
-//   body: JSON.stringify({
-//       model: 'xgboost'
-//   }),
-// })
-// .then(response => response.json())  // Parse the response as JSON
-// .then(data => {
-//   console.log('Response:', data.message);  // Log the message from the server
-// })
-// .catch((error) => {
-//   console.error('Fetch Error:', error);
-// });
+fetch('http://127.0.0.1:5000/train_model', {
+  method: 'POST',
+  headers: {
+      'Content-Type': 'application/json',
+  },
+  body: JSON.stringify({
+      model: 'random_forest'
+  }),
+})
+.then(response => response.json())  // Parse the response as JSON
+.then(data => {
+  console.log('Response:', data.message, data.results);  // Log the message from the server
+})
+.catch((error) => {
+  console.error('Fetch Error:', error);
+});
 
-// // Example to select 'volkswagen' as the brand
+// Example to select 'volkswagen' as the brand
 // fetch('http://127.0.0.1:5000/select_brand', {
 //   method: 'POST',
 //   headers: {
@@ -56,8 +56,8 @@
 
 
 
-// // // Model choice to send
-// const modelChoice = 'random_forest';  // or 'random_forest'
+// // Model choice to send
+// const modelChoice = 'xgboost';  // or 'random_forest'
 
 // // Sending the POST request
 // fetch('http://127.0.0.1:5000/set_model_choice', {
