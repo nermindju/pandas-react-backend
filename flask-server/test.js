@@ -1,7 +1,8 @@
 // // Define the request payload with only type and year
 // const data = {
 //   type: 'SUV',
-//   year: 2022
+//   year: 2022,
+//   transmission: 'Automatic'
 // };
 
 // // Make the fetch request to the Flask server
@@ -25,22 +26,22 @@
 //   console.error('Fetch Error:', error);
 // });
 
-fetch('http://127.0.0.1:5000/train_model', {
-  method: 'POST',
-  headers: {
-      'Content-Type': 'application/json',
-  },
-  body: JSON.stringify({
-      model: 'random_forest'
-  }),
-})
-.then(response => response.json())  // Parse the response as JSON
-.then(data => {
-  console.log('Response:', data.message, data.results);  // Log the message from the server
-})
-.catch((error) => {
-  console.error('Fetch Error:', error);
-});
+// fetch('http://127.0.0.1:5000/train_model', {
+//   method: 'POST',
+//   headers: {
+//       'Content-Type': 'application/json',
+//   },
+//   body: JSON.stringify({
+//       model: 'random_forest'
+//   }),
+// })
+// .then(response => response.json())  // Parse the response as JSON
+// .then(data => {
+//   console.log('Response:', data.message, data.results);  // Log the message from the server
+// })
+// .catch((error) => {
+//   console.error('Fetch Error:', error);
+// });
 
 // Example to select 'volkswagen' as the brand
 // fetch('http://127.0.0.1:5000/select_brand', {
@@ -57,9 +58,9 @@ fetch('http://127.0.0.1:5000/train_model', {
 
 
 // // Model choice to send
-// const modelChoice = 'xgboost';  // or 'random_forest'
+// const modelChoice = 'random_forest';  // or 'random_forest'
 
-// // Sending the POST request
+// // // Sending the POST request
 // fetch('http://127.0.0.1:5000/set_model_choice', {
 //     method: 'POST',
 //     headers: {
