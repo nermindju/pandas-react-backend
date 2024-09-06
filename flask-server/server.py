@@ -121,6 +121,7 @@ def get_ai_message():
     
 @app.route("/get_csv", methods=["GET"])
 def get_csv():
+    global_data = pd.read_csv(f'uploads/{selected_brand}_data.csv')
     try:
         if global_data is not None:
             logging.info("DataFrame loaded successfully.")
@@ -173,6 +174,49 @@ vehicle_type_mapping = {
     'Off-Road':5,
     'Oldtimer':6
 }       
+audi_model_to_type = {
+    'A6': 'Sedan',
+    'A3': 'Hatchback',
+    '100': 'Sedan',
+    'A4': 'Caravan',
+    'A2': 'Small car',
+    '80': 'Sedan',
+    'A6 Allroad': 'Caravan',
+    'A8': 'Sedan',
+    'A1': 'Small car',
+    'TT': 'Sports/Coupe',
+    'Q7': 'SUV',
+    'A5': 'Sedan',
+    'Q5': 'SUV',
+    'A4 Allroad': 'Caravan',
+    'S3': 'Sports/Coupe',
+    'Q3': 'SUV',
+    'A7': 'Sedan',
+    'SQ5': 'SUV',
+    'Q8': 'SUV',
+    'SQ7': 'SUV',
+    'S6': 'Sedan',
+    'RSQ8': 'SUV',
+    'SQ8': 'SUV',
+    'RSQ3': 'SUV',
+    'RS7': 'Sedan',
+    'RS6': 'Caravan',
+    'RS5': 'Sedan',
+    'Q2': 'SUV',
+    'S8': 'Sedan',
+    'S4': 'Sedan',
+    'RS3': 'Sports/Coupe',
+    'SQ2': 'SUV',
+    'S5': 'Sedan',
+    'e-tron GT': 'Sedan',
+    '90': 'Sedan',
+    'S1': 'Small car',
+    'e-tron': 'SUV',
+    'S7': 'Sedan',
+    'RS4': 'Caravan',
+    'R8': 'Sports/Coupe',
+    'V8': 'Sedan'
+}
         
 drivetrain_mapping = {'FWD':1, 'AWD':0, 'RWD':2}
 
@@ -519,15 +563,123 @@ def upload_csv():
             data_vw.drop(data_vw[(data_vw['model'] == 'Golf') & (data_vw['price'] > 400_000)].index, inplace=True)
             data_vw.drop(data_vw[(data_vw['model'] == 'Touran') & (data_vw['year'] < 2003)].index, inplace=True)
             print(f'Nullovi {data_vw.isnull().sum()}')
-            # nan_drivetrain_models = data_vw[data_vw['drivetrain'].isna()]['model']
 
-            # Display the models with NaN values in 'drivetrain'
-            # print("Models with NaN values in drivetrain column:")
-            # print(nan_drivetrain_models.unique())
+            audi_data = global_df[global_df['manufacturer'] == 'Audi']
+            audi_data.drop(audi_data[audi_data['model'] == 'QUATTRO'].index, inplace=True)
+            audi_data.drop(audi_data[audi_data['model'] == '307'].index, inplace=True)
+            audi_data.drop(audi_data[audi_data['model'] == 'Drugi'].index, inplace=True)
+            def map_other_types(data, model_to_type):
+                # Identify all rows with "Other" in the Type column
+                other_rows = data['type'] == 'Other'
+    
+                data.loc[other_rows, 'type'] = data.loc[other_rows, 'model'].map(model_to_type).fillna('Other')
+    
+                return data
 
-            # Check if data_vw is empty 
+            # Apply the mapping function to the DataFrame
+            audi_data = map_other_types(audi_data, audi_model_to_type)
+            print(audi_data[audi_data['type'] == 'Other'])
+            audi_data.drop(audi_data[audi_data['model'] == 'Cabriolet'].index, inplace=True)
+            audi_data.loc[(audi_data['model'] == 'A3') & (audi_data['year'] < 2012), 'type'] = 'Hatchback'  
+            audi_data.loc[(audi_data['model'] == 'A3') & (audi_data['year'] >= 2012) & (audi_data['type'] == 'Small car'), 'type'] = 'Hatchback'  
+            print(audi_data[(audi_data['model'] == 'A3') & (audi_data['year'] >= 2012) & (audi_data['type'] == 'Small car')])
+            audi_data['type'] = audi_data['type'].fillna(audi_data['model'].map(audi_model_to_type))
+            def fill_drivetrain_mode(df):
+                # Calculate mode for each model
+                mode_drivetrain = df.groupby('model')['drivetrain'].agg(lambda x: x.mode().iloc[0] if not x.mode().empty else None)
+
+                # Fill NaN in drivetrain with the mode of corresponding model
+                df['drivetrain'] = df.apply(
+                    lambda row: mode_drivetrain[row['model']] if pd.isna(row['drivetrain']) else row['drivetrain'],
+                    axis=1)
+
+                return df
+
+            audi_data = fill_drivetrain_mode(audi_data)
+            audi_data.dropna(inplace=True)
+            audi_data.drop(audi_data[audi_data['drivetrain'] == 'RWD'].index, inplace=True)
+            audi_data.drop(audi_data[(audi_data['model'] == '80') & (audi_data['price'] > 15_000)].index, inplace=True)
+            models_audi = ['A6', 'A3', '100', 'A4', 'A2', '80', 'A6 Allroad', 'A8', 'A1',
+                    'TT', 'Q7', 'A5', 'Q5', 'A4 Allroad', 'S3', 'Q3', 'A7', 'SQ5',
+                    'Q8', 'SQ7', 'S6', 'RSQ8', 'SQ8', 'RSQ3', 'RS7', 'RS6', 'RS5',
+                    'Q2', 'Q4 e-tron', 'S8', 'S4', 'RS3', 'SQ2', 'S5', 'e-tron GT',
+                    '90', 'S1', 'e-tron', 'S7', 'RS4', 'R8', 'V8', 'Q8 e-tron']
+
+            def filter_df_by_model_in_title(df, known_models):
+                # Convert known models to lowercase and create full search patterns like "Audi A3", "Audi A4", etc.
+                search_patterns = [f'audi {model.lower()}' for model in known_models]
+
+                # Filter rows where the title contains any of the patterns
+                filtered_df = df[df['title'].str.lower().apply(lambda title: any(pattern in title for pattern in search_patterns))]
+
+                # Return the filtered DataFrame
+                return filtered_df
+
+            # Apply the function to filter the DataFrame
+            filtered_audi_df = filter_df_by_model_in_title(audi_data, models_audi)
+            print(filtered_audi_df.shape)
+            filtered_audi_df.drop(filtered_audi_df[filtered_audi_df['model'] == 'Q8 e-tron'].index, inplace=True)
+            filtered_audi_df.loc[(filtered_audi_df['model'] == 'Q4 e-tron'), 'model'] = 'e-tron'
+            filtered_audi_df.loc[(filtered_audi_df['model'] == 'A6') & (filtered_audi_df['type'] == 'Van'), 'type'] = 'Sedan'
+            filtered_audi_df.loc[(filtered_audi_df['model'] == 'A4 Allroad'), 'type'] = 'Caravan'
+            filtered_audi_df.loc[(filtered_audi_df['model'] == 'A4'), 'type'] = 'Sedan'
+            filtered_audi_df.loc[(filtered_audi_df['model'] == 'A6 Allroad'), 'type'] = 'Caravan'
+            filtered_audi_df.loc[(filtered_audi_df['model'] == 'Q3'), 'type'] = 'SUV'
+            filtered_audi_df.loc[(filtered_audi_df['model'] == 'Q5'), 'type'] = 'SUV'
+            filtered_audi_df.loc[(filtered_audi_df['model'] == 'Q7'), 'type'] = 'SUV'
+            filtered_audi_df.loc[(filtered_audi_df['model'] == 'Q8'), 'type'] = 'SUV'
+            filtered_audi_df.loc[(filtered_audi_df['model'] == 'A1'), 'type'] = 'Small car'
+            filtered_audi_df.loc[(filtered_audi_df['model'] == 'A2'), 'type'] = 'Small car'
+            filtered_audi_df.loc[(filtered_audi_df['model'] == 'A7'), 'type'] = 'Sedan'
+            filtered_audi_df.loc[(filtered_audi_df['model'] == 'RSQ3'), 'type'] = 'SUV'
+            filtered_audi_df.loc[(filtered_audi_df['model'] == 'S7'), 'type'] = 'Sedan'
+            filtered_audi_df.loc[(filtered_audi_df['model'] == 'SQ5'), 'type'] = 'SUV'
+            filtered_audi_df.loc[(filtered_audi_df['model'] == 'S4') & (filtered_audi_df['type'] == 'Van'), 'type'] = 'Sedan'
+            filtered_audi_df.loc[(filtered_audi_df['model'] == 'A3') & (filtered_audi_df['type'] == 'Van'), 'type'] = 'Hatchback'
+            filtered_audi_df.loc[(filtered_audi_df['model'] == 'S3') & (filtered_audi_df['type'] == 'Small car'), 'type'] = 'Sedan'
+            filtered_audi_df.loc[(filtered_audi_df['model'] == 'e-tron') & (filtered_audi_df['type'] == 'Sedan'), 'type'] = 'SUV'
+            filtered_audi_df.drop(filtered_audi_df[(filtered_audi_df['model'] == '80') & (filtered_audi_df['type'] == 'Small car')].index, inplace=True)
+            filtered_audi_df.drop(filtered_audi_df[(filtered_audi_df['model'] == '80') & (filtered_audi_df['type'] == 'Monovolume')].index, inplace=True)
+
+            a3_types_to_drop = ['SUV', 'Caravan', 'Monovolume']
+            a6_types_to_drop = ['SUV', 'Convertible', 'Off-Road', 'Sports/Coupe', 'Small car']
+            tt_types_to_map = ['SUV', 'Sedan', 'Small car']
+
+            filtered_audi_df.loc[(filtered_audi_df['model'] == 'TT') & (filtered_audi_df['type'].isin(tt_types_to_map)), 'type'] = 'Sports/Coupe'
+            filtered_audi_df.drop(filtered_audi_df[(filtered_audi_df['model'] == '80') & (filtered_audi_df['type'] == 'Monovolume')].index, inplace=True)
+            filtered_audi_df.drop(filtered_audi_df[(filtered_audi_df['model'] == 'A3') & (filtered_audi_df['type'].isin(a3_types_to_drop))].index, inplace=True)
+            filtered_audi_df.drop(filtered_audi_df[(filtered_audi_df['model'] == 'A5') & (filtered_audi_df['type'] == 'Small car')].index, inplace=True)
+            filtered_audi_df.drop(filtered_audi_df[(filtered_audi_df['model'] == 'S5') & (filtered_audi_df['type'] == 'Small car')].index, inplace=True)
+            filtered_audi_df.drop(filtered_audi_df[(filtered_audi_df['model'] == 'A6') & (filtered_audi_df['type'].isin(a6_types_to_drop))].index, inplace=True)
+
+            def check_model_types(df):
+                # Group by 'model' and find unique 'type' values for each model
+                model_types = df.groupby('model')['type'].unique().reset_index()
+
+                # Rename the column for clarity
+                model_types.columns = ['model', 'types_present']
+
+                # Return the DataFrame showing the models and their associated types
+                return model_types
+
+            # Apply the function to check types for each model
+            model_types_df = check_model_types(filtered_audi_df)
+
+            print(model_types_df)
+            # print(filtered_audi_df[filtered_audi_df['model'] == '80']['type'].value_counts())
+            # print(filtered_audi_df.shape)
+            # print(filtered_audi_df.isnull().sum())
+            filtered_audi_df.loc[(filtered_audi_df['fuel'] == 'Electro') & (filtered_audi_df['transmission'] == 'Manual'), 'transmission'] = 'Automatic'
+            # print(filtered_audi_df[filtered_audi_df['fuel'] == 'Electro']['transmission'].value_counts())
+            print(filtered_audi_df.shape)
+
+            # Check if data_vw and audi_data is empty 
             if data_vw.empty:
                 return jsonify({"error": "Filtered Volkswagen data is empty after processing."}), 400
+            elif audi_data.empty:
+                return jsonify({"error": "Filtered Audi data is empty after processing."}), 400
+            
+            
 
             # Ensure no NaNs in final JSON response
             data_vw = data_vw.replace({np.nan: None})
@@ -541,12 +693,15 @@ def upload_csv():
             vw_csv_path = os.path.join(app.config['UPLOAD_FOLDER'], vw_csv)
             data_vw.to_csv(vw_csv_path, index=False)
 
+            # Save Audi data as a CSV file
+            audi_csv = 'audi_data.csv'
+            audi_csv_path = os.path.join(app.config['UPLOAD_FOLDER'], audi_csv)
+            filtered_audi_df.to_csv(audi_csv_path, index=False)
 
 
             # Convert data to JSON-serializable format
             data = data_vw.to_dict(orient="records")
             description = global_df.describe().round(2).replace({np.nan: None}).to_dict()
-            print(data_vw.isnull().sum())
             return jsonify({
                 "data": data,
                 "shape": global_df.shape,
@@ -586,6 +741,8 @@ def train_model(model_choice):
         'audi': audi_data,
         'volkswagen': vw_data
     }
+
+    results = {}
     
     for brand, data in data_dict.items():
         if data.empty:
@@ -595,7 +752,13 @@ def train_model(model_choice):
         # Preparing data for models
         encoder = LabelEncoder()
         model_data = data.copy()
-        model_data['type_encoded'] = encoder.fit_transform(model_data['type'])
+        if brand == 'audi':
+            model_data['type_encoded'] = model_data['type'].map({'Sedan':9, 'Hatchback':3, 'SUV':8, 'Caravan':1,
+                                               'Sports/Coupe':11, 'Small car':10, 'Convertible':2,
+                                               'Oldtimer':6})
+        else:
+            model_data['type_encoded'] = encoder.fit_transform(model_data['type'])
+        print(model_data[['type', 'type_encoded']].value_counts())
         model_data['cruisecontrol'] = model_data['cruisecontrol'].astype('str')
         model_data['cruisecontrol_encoded'] = encoder.fit_transform(model_data['cruisecontrol'])
         model_data['aircondition'] = model_data['aircondition'].astype('str')
@@ -611,10 +774,31 @@ def train_model(model_choice):
         model_data['fuel_encoded'] = encoder.fit_transform(model_data['fuel'])
         model_data['drivetrain_encoded'] = encoder.fit_transform(model_data['drivetrain'])
         model_data['doors_encoded'] = encoder.fit_transform(model_data['doors'])
+        
 
         model_data['displacement'] = model_data['displacement'].astype('float')
         model_data['kilowatts'] = model_data['kilowatts'].astype('int')
         model_data['year'] = model_data['year'].astype('int')
+        strings_to_drop = ['havarisan', 'udaren', 'stranac', 'za dijelova', 'dijelove', 'uvoz']
+
+
+        def drop_rows_with_strings_in_title(df, strings_to_drop):
+            if 'title' not in df.columns:
+                raise ValueError("'title' column not found in the DataFrame.")
+            
+            # Convert the 'title' column to lowercase for case-insensitive comparison
+            temp_title_lower = df['title'].str.lower()
+
+            
+            # Combine the strings to drop into a single regex pattern
+            pattern = '|'.join(strings_to_drop)
+            
+            # Filter out rows where 'title' contains any of the strings
+            filtered_df = df[~temp_title_lower.str.contains(pattern, case=False, na=False)]
+            
+            return filtered_df
+
+        model_data = drop_rows_with_strings_in_title(model_data, strings_to_drop)
         
         X = model_data[['displacement', 'kilowatts', 'mileage', 'year', 'rimsize', 'drivetrain_encoded', 
                         'doors_encoded', 'type_encoded', 'cruisecontrol_encoded', 'aircondition_encoded', 
@@ -641,12 +825,19 @@ def train_model(model_choice):
 
         y_prediction = model.predict(X_test)
 
-        print(f"Results for {brand}:")
-        print(f"R2 Score: {r2_score(y_test, y_prediction)}")
-        print(f"RMSE: {math.sqrt(mean_squared_error(y_test, y_prediction))}")
-        print(f"MAE: {mean_absolute_error(y_test, y_prediction)}")
+        # Calculate metrics
+        r2 = round(r2_score(y_test, y_prediction), 2)
+        rmse = round(math.sqrt(mean_squared_error(y_test, y_prediction)), 2)
+        mae = round(mean_absolute_error(y_test, y_prediction), 2)
 
-    return True
+        # Store the results for the current brand
+        results[brand] = {
+            'R2 Score': r2,
+            'RMSE': rmse,
+            'MAE': mae
+        }
+
+    return results
 
 
 
@@ -661,7 +852,8 @@ def handle_train_model():
         success = train_model(model_choice)
 
         if success:
-            return jsonify({"message": f"{model_choice.replace('_', ' ').capitalize()} model trained successfully"}), 200
+            return jsonify({"message": f"{model_choice.replace('_', ' ').capitalize()} model trained successfully",
+                            'results':success}), 200
         else:
             return jsonify({"message": f"Failed to train {model_choice.replace('_', ' ').capitalize()} model"}), 500
 
@@ -699,6 +891,7 @@ def set_model_choice():
 
 @app.route("/get_columns", methods=['GET'])
 def get_columns():
+    global_data = pd.read_csv(f'uploads/{selected_brand}_data.csv')
     if global_data is None:
         return jsonify({"error": "No data available. Please upload a CSV file first."}), 400
     
@@ -854,6 +1047,7 @@ def get_prediction():
 
 @app.route("/hist_plot", methods=["GET"])
 def get_hist_plot_data():
+    global_data = pd.read_csv(f'uploads/{selected_brand}_data.csv')
     try:
         if global_data is None:
             return jsonify({"error": "No data available. Please upload a CSV file first."}), 400
@@ -878,6 +1072,7 @@ def get_hist_plot_data():
 
 @app.route("/model_ranking", methods=["GET"])
 def get_model_ranking_data():
+    global_data = pd.read_csv(f'uploads/{selected_brand}_data.csv')
     try:
         if global_data is None or 'model' not in global_data.columns:
             return jsonify({"error": "No data available or 'model' column is missing."}), 400
@@ -895,6 +1090,7 @@ def get_model_ranking_data():
 
 @app.route("/models_average_price", methods=['GET'])
 def get_models_average_price():
+    global_data = pd.read_csv(f'uploads/{selected_brand}_data.csv')
     try:
         if global_data is None or 'model' not in global_data.columns:
             return jsonify({"error": "No data available or 'model' column is missing"}), 400
@@ -916,6 +1112,7 @@ def get_models_average_price():
 
 @app.route("/get_models_price_box", methods=["GET"])
 def get_models_price_box_data():
+    global_data = pd.read_csv(f'uploads/{selected_brand}_data.csv')
     try:
         if global_data is None:
             return jsonify({"error": "No data available. Please upload a CSV file first."}), 400
@@ -970,6 +1167,7 @@ def get_models_price_box_data():
 
 @app.route("/type_minmax_price", methods=['GET'])
 def get_type_minmax_price():
+    global_data = pd.read_csv(f'uploads/{selected_brand}_data.csv')
     try:
         if global_data is None or 'type' not in global_data.columns:
             return jsonify({"error": "No data available or 'type' column is missing"}), 400
@@ -998,16 +1196,24 @@ def get_type_minmax_price():
 
 @app.route("/model_listings", methods=['GET'])
 def model_listings():
+    global_data = pd.read_csv(f'uploads/{selected_brand}_data.csv')
     try:
         if global_data is None or 'type' not in global_data.columns or 'model' not in global_data.columns:
             return jsonify({"error": "No data available or 'type'/'model' column is missing"}), 400
 
         modelCounts = global_data['model'].value_counts().to_dict()
+        if selected_brand == 'audi':
+            response_data = {
+                'model_to_type': audi_model_to_type,
+                'modelCounts': modelCounts
+            }
+        else: 
+            response_data = {
+                'model_to_type': model_to_type,
+                'modelCounts': modelCounts
+            }
 
-        response_data = {
-            'model_to_type': model_to_type,
-            'modelCounts': modelCounts
-        }
+
 
         return jsonify(response_data)
 
@@ -1017,6 +1223,7 @@ def model_listings():
     
 @app.route("/get_line_plot_data", methods=['GET'])
 def get_line_plot_data():
+    global_data = pd.read_csv(f'uploads/{selected_brand}_data.csv')
     try:
         if global_data is None or 'model' not in global_data.columns or 'price' not in global_data.columns:
             return jsonify({"error": "No data available or 'model'/'price' column is missing"}), 400
@@ -1057,6 +1264,7 @@ def get_line_plot_data():
 
 @app.route('/get_prices', methods=['GET'])
 def get_prices():
+    global_data = pd.read_csv(f'uploads/{selected_brand}_data.csv')
     try:
         if global_data is None or 'price' not in global_data.columns:
             return jsonify({"error": "No data available or 'price' column is missing"}), 400
@@ -1079,6 +1287,7 @@ def get_prices():
 
 @app.route('/get_correlation_heatmap', methods=['GET'])
 def get_correlation_heatmap():
+    global_data = pd.read_csv(f'uploads/{selected_brand}_data.csv')
     try:
         encoder = LabelEncoder()
         global_data['type'] = global_data['type'].map(vehicle_type_mapping)
@@ -1117,6 +1326,7 @@ def get_correlation_heatmap():
 
 @app.route('/get_scatterplot_data', methods=['GET'])
 def get_scatterplot_data():
+    global_data = pd.read_csv(f'uploads/{selected_brand}_data.csv')
     try:
         if 'price' not in global_data.columns or 'year' not in global_data.columns or 'type' not in global_data.columns:
             return jsonify({"error": "'price', 'year', or 'type' column is missing"}), 400
@@ -1140,6 +1350,7 @@ def get_scatterplot_data():
 
 @app.route("/get_line_plot_data_prices", methods=['GET'])
 def get_line_plot_data_prices():
+    global_data = pd.read_csv(f'uploads/{selected_brand}_data.csv')
     try:
         if global_data is None or 'type' not in global_data.columns or 'price' not in global_data.columns:
             return jsonify({"error": "No data available or 'type'/'price' column is missing"}), 400
@@ -1179,6 +1390,7 @@ def get_line_plot_data_prices():
 
 @app.route("/get_top5_models_avg_price_data", methods=["GET"])
 def get_top5_models_avg_price_data():
+    global_data = pd.read_csv(f'uploads/{selected_brand}_data.csv')
     try:
         if global_data is None or 'model' not in global_data.columns:
             return jsonify({"error": "No data available or 'model' column is missing."}), 400
@@ -1202,10 +1414,10 @@ def get_top5_models_avg_price_data():
 @app.route("/map", methods=['GET'])
 def generate_map_data():
     try:
-        top_locations = pd.read_csv('flask-server/location_map/geocoded_locations.csv')
+        top_locations = pd.read_csv(f'flask-server/location_map/geocoded_{selected_brand}_locations.csv')
     except FileNotFoundError:
         return {
-            "error": "geocoded_locations.csv file not found."
+            "error": f"geocoded_{selected_brand}_locations.csv file not found."
         }
 
     # Convert the data into a format that can be easily used by the frontend
@@ -1220,6 +1432,7 @@ def generate_map_data():
 
 @app.route("/get_top5models_barplot_data", methods=['GET'])
 def get_top5models_barplot_data():
+    global_data = pd.read_csv(f'uploads/{selected_brand}_data.csv')
     try:
         if global_data is None or 'model' not in global_data.columns or 'price' not in global_data.columns:
             return jsonify({"error": "No data available or 'model' column is missing."}), 400
@@ -1259,6 +1472,7 @@ def get_top5models_barplot_data():
 
 @app.route("/get_top5types_barplot_data", methods=['GET'])
 def get_top5types_barplot_data():
+    global_data = pd.read_csv(f'uploads/{selected_brand}_data.csv')
     try:
         if global_data is None or 'type' not in global_data.columns or 'price' not in global_data.columns:
             return jsonify({"error": "No data available or 'model' column is missing."}), 400
@@ -1295,39 +1509,37 @@ def get_top5types_barplot_data():
         return jsonify({"error": str(e)}), 500
 
 
-if __name__ == '__main__':
-    app.run(debug=True)
+@app.route("/group_by", methods=["POST"])
+def group_by():
+    global_data = pd.read_csv(f'uploads/{selected_brand}_data.csv')
 
-# @app.route("/group_by", methods=["POST"])
-# def group_by():
-#     global global_df
 
-#     if global_df is None:
-#         return jsonify({"error": "No data available. Please upload a CSV file first."}), 400
+    if global_data is None:
+        return jsonify({"error": "No data available. Please upload a CSV file first."}), 400
 
-#     request_data = request.get_json()
-#     column_name = request_data.get("column_name")
-#     value_column = request_data.get("value_column")
-#     aggregation_function = request_data.get("aggregation_function")
+    request_data = request.get_json()
+    column_name = request_data.get("column_name")
+    value_column = request_data.get("value_column")
+    aggregation_function = request_data.get("aggregation_function")
 
-#     if column_name is None or column_name not in global_df.columns:
-#         return jsonify({"error": "Invalid column name"}), 400
+    if column_name is None or column_name not in global_data.columns:
+        return jsonify({"error": "Invalid column name"}), 400
 
-#     if value_column is None or value_column not in global_df.columns:
-#         return jsonify({"error": "Invalid value column"}), 400
+    if value_column is None or value_column not in global_data.columns:
+        return jsonify({"error": "Invalid value column"}), 400
 
-#     if aggregation_function not in ["mean", "sum", "count", "max", "min"]:
-#         return jsonify({"error": "Invalid aggregation function"}), 400
+    if aggregation_function not in ["mean", "sum", "count", "max", "min"]:
+        return jsonify({"error": "Invalid aggregation function"}), 400
 
-#     try:
-#         grouped_df = global_df.groupby(column_name).agg({value_column: aggregation_function}).reset_index().round(2)
-#         grouped_data = grouped_df.to_dict(orient="records")
-#     except Exception as e:
-#         return jsonify({"error": str(e)}), 500
+    try:
+        grouped_df = global_data.groupby(column_name).agg({value_column: aggregation_function}).reset_index().round(2)
+        grouped_data = grouped_df.to_dict(orient="records")
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
 
-#     return jsonify({
-#         "grouped_data": grouped_data
-#     })
+    return jsonify({
+        "grouped_data": grouped_data
+    })
 
 if __name__ == "__main__":  
     app.run(debug=True)
