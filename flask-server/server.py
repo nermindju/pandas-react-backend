@@ -744,7 +744,6 @@ def load_data(brand):
 
 
 def train_model(model_choice):
-    
     # Load datasets for Audi and Volkswagen
     audi_data = pd.read_csv('uploads/audi_data.csv')
     vw_data = pd.read_csv('uploads/volkswagen_data.csv')
@@ -771,6 +770,7 @@ def train_model(model_choice):
         else:
             model_data['type_encoded'] = encoder.fit_transform(model_data['type'])
 
+        # Encoding categorical features
         model_data['cruisecontrol'] = model_data['cruisecontrol'].astype('str')
         model_data['cruisecontrol_encoded'] = encoder.fit_transform(model_data['cruisecontrol'])
         model_data['aircondition'] = model_data['aircondition'].astype('str')
@@ -790,6 +790,7 @@ def train_model(model_choice):
         model_data['displacement'] = model_data['displacement'].astype('float')
         model_data['kilowatts'] = model_data['kilowatts'].astype('int')
         model_data['year'] = model_data['year'].astype('int')
+
         strings_to_drop = ['havarisan', 'udaren', 'stranac', 'za dijelova', 'dijelove', 'uvoz']
 
         def drop_rows_with_strings_in_title(df, strings_to_drop):
@@ -828,6 +829,20 @@ def train_model(model_choice):
         
         model.fit(X_train, y_train)
 
+        y_prediction = model.predict(X_test)
+
+        # Calculate metrics
+        r2 = round(r2_score(y_test, y_prediction), 2)
+        rmse = round(math.sqrt(mean_squared_error(y_test, y_prediction)), 2)
+        mae = round(mean_absolute_error(y_test, y_prediction), 2)
+
+        # Store the results for the current brand
+        results[brand] = {
+            'R2 Score': r2,
+            'RMSE': rmse,
+            'MAE': mae
+        }
+
         # Create the model folder if it doesn't exist
         os.makedirs(f'{brand}_models', exist_ok=True)
         
@@ -858,27 +873,23 @@ def train_model(model_choice):
                 os.remove(f'{backup_folder}/{oldest_model}')
                 print(f"Deleted oldest model: {oldest_model}")
 
-        # Save the new model with a timestamp
+        # Save the new model with a timestamp, including the metrics
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
         new_model_path = f'{brand}_models/{model_choice}_model_{timestamp}.joblib'
-        joblib.dump(model, new_model_path)
-        print(f"Saved new model at {new_model_path}")
-
-        y_prediction = model.predict(X_test)
-
-        # Calculate metrics
-        r2 = round(r2_score(y_test, y_prediction), 2)
-        rmse = round(math.sqrt(mean_squared_error(y_test, y_prediction)), 2)
-        mae = round(mean_absolute_error(y_test, y_prediction), 2)
-
-        # Store the results for the current brand
-        results[brand] = {
+        
+        # Save the model and metrics in a dictionary object
+        model_object = {
+            'model': model,
             'R2 Score': r2,
             'RMSE': rmse,
             'MAE': mae
         }
 
+        joblib.dump(model_object, new_model_path)
+        print(f"Saved new model with metrics at {new_model_path}")
+
     return results
+
 
 
 @app.route('/train_model', methods=['POST'])
@@ -1005,12 +1016,20 @@ def get_prediction():
 
     if global_model_choice is None:
         load_default_model()
-    
+
     model_path = f'{global_model_choice}'
-    model = joblib.load(model_path)
+
+    # Load the model object which includes the model and the metrics
+    model_object = joblib.load(model_path)
+    model = model_object['model']  # Extract the trained model
+    r2_score = model_object.get('R2 Score', 'N/A')  # Extract R² score
+    rmse = model_object.get('RMSE', 'N/A')  # Extract RMSE
+    mae = model_object.get('MAE', 'N/A')  # Extract MAE
+
     model_data = pd.read_csv(f'uploads/{selected_brand}_data.csv')
     print(global_model_choice)
     print(selected_brand)
+
     try:
         data = request.json
 
@@ -1141,7 +1160,12 @@ def get_prediction():
 
         return jsonify({
             "prediction": str(prediction),
-            "vehicles": filtered_vehicles_json
+            "vehicles": filtered_vehicles_json,
+            "model_metrics": {
+                "R2 Score": r2_score,
+                "RMSE": rmse,
+                "MAE": mae
+            }
         })
 
     except KeyError as e:
