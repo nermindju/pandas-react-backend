@@ -4,6 +4,7 @@ import shutil
 from datetime import datetime
 import pandas as pd
 import os
+import fnmatch
 import glob
 import traceback
 import re
@@ -29,21 +30,15 @@ os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
 global_df = None
 global_data = pd.read_csv('uploads/volkswagen_data.csv')
-global_model_choice = 'xgboost'
+global_model_choice = None
 selected_brand = 'volkswagen'
 volkswagen_data=pd.read_csv('uploads/volkswagen_data.csv')
-# model_path = f'{selected_brand}_models/{global_model_choice}_model.joblib'
-# model = joblib.load(model_path)
-
-# try:
-#     model = joblib.load(model_path)
-#     print("Model loaded successfully.")
-# except FileNotFoundError:
-#     model = None
-#     print(f"Error: Model file not found at {model_path}.")
-# except Exception as e:
-#     model = None
-#     print(f"An error occurred while loading the model: {e}")
+default_model_path = f'{selected_brand}_models/'
+default_model_prefix = 'xgboost_model'
+for file_name in os.listdir(default_model_path):
+    if fnmatch.fnmatch(file_name, f'{default_model_prefix}*.joblib'):
+        global_model_choice = os.path.join(default_model_path, file_name)
+        break
 
 
 import logging
@@ -725,6 +720,17 @@ def standardize_model(model):
     model = model.replace('Kombi', '').strip()
     return model
 
+def load_default_model():
+    global global_model_choice, selected_brand
+    if selected_brand:  # Ensure the brand is set
+        # Dynamically set the model path based on selected_brand
+        default_model_path = f'{selected_brand}_models/'
+        default_model_prefix = 'xgboost_model'
+        # Find the default xgboost model file in the selected brand's folder
+        for file_name in os.listdir(default_model_path):
+            if fnmatch.fnmatch(file_name, f'{default_model_prefix}*.joblib'):
+                global_model_choice = os.path.join(default_model_path, file_name)
+                break
 
 def load_data(brand):
     global global_data, selected_brand
@@ -891,6 +897,33 @@ def handle_train_model():
     except Exception as e:
         print(f"Error: {e}")
         return jsonify({"message": "Internal server error"}), 500
+    
+
+@app.route('/get_models', methods=['GET'])
+def get_models():
+    # Get the model type from the query params (either 'new' or 'old')
+    model_type = request.args.get('model_type')
+    
+    if model_type not in ['new', 'old']:
+        return jsonify({'status': 'error', 'message': 'Invalid model type. Choose "new" or "old".'}), 400
+
+    brand = selected_brand  # Adjust this dynamically based on frontend if needed
+    if model_type == 'new':
+        folder_to_search = f'{brand}_models'
+    elif model_type == 'old':
+        folder_to_search = f'old_{brand}_models'
+
+    # Get all models in the selected folder
+    model_pattern = f'{folder_to_search}/*.joblib'
+    available_models = glob.glob(model_pattern)
+
+    if not available_models:
+        return jsonify({'status': 'error', 'message': f'No models found in the {model_type} folder'}), 404
+
+    # Extract only the filenames (without the full path)
+    model_list = [os.path.basename(model) for model in available_models]
+
+    return jsonify({'status': 'success', 'models': model_list}), 200
 
 
 @app.route("/select_brand", methods=["POST"])
@@ -899,6 +932,7 @@ def select_brand():
     if brand:
         try:
             load_data(brand)
+            load_default_model()
             return jsonify({"message": f"Brand '{brand}' data loaded."})
         except Exception as e:
             return jsonify({"error": str(e)}), 500
@@ -906,18 +940,51 @@ def select_brand():
         return jsonify({"error": "No brand selected."}), 400
 
 
-@app.route('/set_model_choice', methods=['POST'])
-def set_model_choice():
+@app.route('/set_selected_model', methods=['POST'])
+def set_selected_model():
     global global_model_choice
     data = request.json
     
-    model_choice = data.get('model_choice')
+    model_name = data.get('model_name')  # Full filename of the selected model
+    model_type = data.get('model_type')  # 'new' or 'old' to know the folder
+
+    if model_type not in ['new', 'old']:
+        return jsonify({'status': 'error', 'message': 'Invalid model type. Choose "new" or "old".'}), 400
+
+    if model_type == 'new':
+        folder_to_search = f'{selected_brand}_models'
+    elif model_type == 'old':
+        folder_to_search = f'old_{selected_brand}_models'
+
+    # Full path to the selected model
+    model_path = os.path.join(folder_to_search, model_name)
+
+    # Debugging: Log the path to check if it exists
+    print(f"Looking for model at: {model_path}")
+
+    if not os.path.exists(model_path):
+        return jsonify({'status': 'error', 'message': f'Model {model_name} not found in {model_type} folder'}), 404
+
+    # Set the global model choice to the selected model
+    global_model_choice = model_path
+
+    return jsonify({'status': 'success', 'message': f'Model {model_name} set as active model', 'model_path': model_path}), 200
+
+
+
+
+# @app.route('/set_model_choice', methods=['POST'])
+# def set_model_choice():
+#     global global_model_choice
+#     data = request.json
     
-    if model_choice in ['xgboost', 'random_forest']:
-        global_model_choice = model_choice
-        return jsonify({'status': 'success', 'message': f'Model choice set to {model_choice}'}), 200
-    else:
-        return jsonify({'status': 'error', 'message': 'Invalid model choice'}), 400
+#     model_choice = data.get('model_choice')
+    
+#     if model_choice in ['xgboost', 'random_forest']:
+#         global_model_choice = model_choice
+#         return jsonify({'status': 'success', 'message': f'Model choice set to {model_choice}'}), 200
+#     else:
+#         return jsonify({'status': 'error', 'message': 'Invalid model choice'}), 400
 
 
 @app.route("/get_columns", methods=['GET'])
@@ -931,7 +998,12 @@ def get_columns():
 
 @app.route("/get_prediction", methods=['POST'])
 def get_prediction():
-    model_path = f'{selected_brand}_models/{global_model_choice}_model.joblib'
+    global global_model_choice
+
+    if global_model_choice is None:
+        load_default_model()
+    
+    model_path = f'{global_model_choice}'
     model = joblib.load(model_path)
     model_data = pd.read_csv(f'uploads/{selected_brand}_data.csv')
     print(global_model_choice)
@@ -1573,4 +1645,5 @@ def group_by():
     })
 
 if __name__ == "__main__":  
+    load_default_model()  
     app.run(debug=True)
