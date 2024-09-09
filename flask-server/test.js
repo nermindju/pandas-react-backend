@@ -19,6 +19,7 @@
 //   } else {
 //       console.log('Prediction:', data.prediction);
 //       console.log('Vehicles:', data.vehicles);
+//       console.log('Metrics:', data.model_metrics)
 //   }
 // })
 // .catch(error => {
@@ -69,7 +70,7 @@
 //   });
 // }
 
-// // // Example usage to fetch new or old models
+// // // // Example usage to fetch new or old models
 // fetchModels('old');  // To fetch new models
 // fetchModels('new');  // To fetch new models
 
@@ -105,8 +106,8 @@
 //   });
 // }
 
-// // // // // Example usage to set the selected model
-// setSelectedModel('xgboost_model_20240909_110215.joblib', 'old');  // Set a model from old models
+// // // // // // Example usage to set the selected model
+// setSelectedModel('xgboost_model_20240909_131424.joblib', 'old');  // Set a model from old models
 
 
 
@@ -117,7 +118,7 @@
 //   headers: {
 //       'Content-Type': 'application/json'
 //   },
-//   body: JSON.stringify({ brand: 'audi' })
+//   body: JSON.stringify({ brand: 'volkswagen' })
 // })
 // .then(response => response.json())
 // .then(data => console.log(data))
