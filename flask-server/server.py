@@ -1,7 +1,10 @@
 from flask import Flask, jsonify, request, Response
 from flask_cors import CORS
+import shutil
+from datetime import datetime
 import pandas as pd
 import os
+import glob
 import traceback
 import re
 import numpy as np
@@ -758,7 +761,7 @@ def train_model(model_choice):
                                                'Oldtimer':6})
         else:
             model_data['type_encoded'] = encoder.fit_transform(model_data['type'])
-        print(model_data[['type', 'type_encoded']].value_counts())
+
         model_data['cruisecontrol'] = model_data['cruisecontrol'].astype('str')
         model_data['cruisecontrol_encoded'] = encoder.fit_transform(model_data['cruisecontrol'])
         model_data['aircondition'] = model_data['aircondition'].astype('str')
@@ -774,13 +777,11 @@ def train_model(model_choice):
         model_data['fuel_encoded'] = encoder.fit_transform(model_data['fuel'])
         model_data['drivetrain_encoded'] = encoder.fit_transform(model_data['drivetrain'])
         model_data['doors_encoded'] = encoder.fit_transform(model_data['doors'])
-        
 
         model_data['displacement'] = model_data['displacement'].astype('float')
         model_data['kilowatts'] = model_data['kilowatts'].astype('int')
         model_data['year'] = model_data['year'].astype('int')
         strings_to_drop = ['havarisan', 'udaren', 'stranac', 'za dijelova', 'dijelove', 'uvoz']
-
 
         def drop_rows_with_strings_in_title(df, strings_to_drop):
             if 'title' not in df.columns:
@@ -789,7 +790,6 @@ def train_model(model_choice):
             # Convert the 'title' column to lowercase for case-insensitive comparison
             temp_title_lower = df['title'].str.lower()
 
-            
             # Combine the strings to drop into a single regex pattern
             pattern = '|'.join(strings_to_drop)
             
@@ -819,9 +819,41 @@ def train_model(model_choice):
         
         model.fit(X_train, y_train)
 
+        # Create the model folder if it doesn't exist
         os.makedirs(f'{brand}_models', exist_ok=True)
-        model_path = f'{brand}_models/{model_choice}_model.joblib'
-        joblib.dump(model, model_path)
+        
+        # Define paths for current model and backup folder
+        model_filename_prefix = f'{model_choice}_model'
+        model_path_pattern = f'{brand}_models/{model_filename_prefix}_*.joblib'
+        backup_folder = f'old_{brand}_models'
+        
+        # Create backup folder if it doesn't exist
+        os.makedirs(backup_folder, exist_ok=True)
+
+        # Check for existing models that match the pattern (ignore timestamp)
+        existing_models = glob.glob(model_path_pattern)
+
+        # If any matching models are found, move them to the backup folder
+        for existing_model in existing_models:
+            creation_time = datetime.fromtimestamp(os.path.getctime(existing_model)).strftime("%Y%m%d_%H%M%S")
+            backup_model_path = f'{backup_folder}/{model_choice}_model_{creation_time}.joblib'
+            shutil.move(existing_model, backup_model_path)
+            print(f"Moved existing model to {backup_model_path}")
+        
+        # Maintain only the last 3 models in the backup folder
+        backup_models = sorted(os.listdir(backup_folder), key=lambda x: os.path.getctime(f'{backup_folder}/{x}'))
+        if len(backup_models) > 3:
+            # Remove the oldest models until only 3 are left
+            while len(backup_models) > 3:
+                oldest_model = backup_models.pop(0)  # Remove the oldest model (first in sorted list)
+                os.remove(f'{backup_folder}/{oldest_model}')
+                print(f"Deleted oldest model: {oldest_model}")
+
+        # Save the new model with a timestamp
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        new_model_path = f'{brand}_models/{model_choice}_model_{timestamp}.joblib'
+        joblib.dump(model, new_model_path)
+        print(f"Saved new model at {new_model_path}")
 
         y_prediction = model.predict(X_test)
 
@@ -838,7 +870,6 @@ def train_model(model_choice):
         }
 
     return results
-
 
 
 @app.route('/train_model', methods=['POST'])
