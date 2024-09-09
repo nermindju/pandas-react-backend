@@ -397,6 +397,9 @@ def upload_csv():
             global_df['emissionstandard'].fillna(global_df['emissionstandard'].mode()[0], inplace=True)
             global_df['color'].fillna('-', inplace=True)
             global_df['parkingsensors'].fillna('-', inplace=True)
+            global_df['uvoz'] = global_df['title'].str.contains('stranac|uvoz', case=False, regex=True).astype(int)
+            global_df['udaren'] = global_df['title'].str.contains('havarisan|udaren', case=False, regex=True).astype(int)
+
 
             global_df.drop(global_df[(global_df['displacement'] > 7.0) | (global_df['displacement'] <= 0)].index, inplace=True)
             global_df.drop(global_df[(global_df['kilowatts'] > 600) | (global_df['kilowatts'] < 35)].index, inplace=True)

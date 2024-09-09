@@ -69,44 +69,44 @@
 //   });
 // }
 
-// // // Example usage to fetch new or old models
+// // // // Example usage to fetch new or old models
 // fetchModels('old');  // To fetch new models
 // fetchModels('new');  // To fetch new models
 
 
 // // Function to set the selected model on the server
-// function setSelectedModel(modelName, modelType) {
-//   fetch('http://127.0.0.1:5000/set_selected_model', {
-//       method: 'POST',
-//       headers: {
-//           'Content-Type': 'application/json',
-//       },
-//       body: JSON.stringify({
-//           model_name: modelName,
-//           model_type: modelType
-//       })
-//   })
-//   .then(response => {
-//       if (!response.ok) {
-//           throw new Error(`HTTP error! status: ${response.status}`);
-//       }
-//       return response.json();
-//   })
-//   .then(data => {
-//       if (data.status === 'success') {
-//           console.log('Model selected successfully:', data.message);
-//           console.log('Model path:', data.model_path);
-//       } else {
-//           console.log('Error:', data.message);
-//       }
-//   })
-//   .catch(error => {
-//       console.error('Error setting model:', error);
-//   });
-// }
+function setSelectedModel(modelName, modelType) {
+  fetch('http://127.0.0.1:5000/set_selected_model', {
+      method: 'POST',
+      headers: {
+          'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+          model_name: modelName,
+          model_type: modelType
+      })
+  })
+  .then(response => {
+      if (!response.ok) {
+          throw new Error(`HTTP error! status: ${response.status}`);
+      }
+      return response.json();
+  })
+  .then(data => {
+      if (data.status === 'success') {
+          console.log('Model selected successfully:', data.message);
+          console.log('Model path:', data.model_path);
+      } else {
+          console.log('Error:', data.message);
+      }
+  })
+  .catch(error => {
+      console.error('Error setting model:', error);
+  });
+}
 
-// // // // // Example usage to set the selected model
-// setSelectedModel('xgboost_model_20240909_110215.joblib', 'old');  // Set a model from old models
+// // // // Example usage to set the selected model
+setSelectedModel('xgboost_model_20240909_110215.joblib', 'old');  // Set a model from old models
 
 
 
